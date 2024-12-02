@@ -69,37 +69,37 @@ The input data typically consists of a table containing clonotypes as defined ab
 3. There should be no symbols except for 20 amino acids in CDR3s
 
 #### Input columns
-| Column name | Description | Required |
-| ----------- | ----------- | ----------- |
-| a_cdr3aa | TCR alpha CDR3 amino acid sequence | required or blank(*) |
-| a_v | TCR alpha V gene ID | required or blank |
-| a_j | TCR alpha J gene ID | required or blank |
-| b_cdr3aa | TCR beta CDR3 amino acid sequence | required or blank |
-| b_v | TCR beta V gene ID | required or blank |
-| b_j | TCR beta J gene ID | required or blank |
-| clonotype_index | user provided clonotype id, will be transferred to results | optional |
-| label | user provided label, will be used in cluster enrichment post-analysis | optional |
+| Column name     | Description                                                           | Required             |
+|-----------------|-----------------------------------------------------------------------|----------------------|
+| a_cdr3aa        | TCR alpha CDR3 amino acid sequence                                    | required or blank(*) |
+| a_v             | TCR alpha V gene ID                                                   | required or blank    |
+| a_j             | TCR alpha J gene ID                                                   | required or blank    |
+| b_cdr3aa        | TCR beta CDR3 amino acid sequence                                     | required or blank    |
+| b_v             | TCR beta V gene ID                                                    | required or blank    |
+| b_j             | TCR beta J gene ID                                                    | required or blank    |
+| clonotype_index | user provided clonotype id, will be transferred to results            | optional             |
+| label           | user provided label, will be used in cluster enrichment post-analysis | optional             |
 
 (*) At least one of TCR chains should be present in each row with V, J and CDR3aa records filled. For single-chain data, the other chain may have all three records blank.
 
 
-#### Single chain table example example
+#### Single chain table example
 
 Either wide with missing values
 
-| clonotype_index | a_cdr3aa | a_v | a_j | b_cdr3aa | b_v | b_j | label |
-| :---:   | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
-| GACTGCGCATCGTCGG-28   | CAGHTGNQFYF | TRAV35	 | TRAJ49 |   |  |  |  IVTDFSVIK |
-| GACTGCGCATCGTCGG-28   |  |  |   | CASSWGGGSHYGYTF | TRBV11-2  | TRBJ1-2 |  IVTDFSVIK |
+|   clonotype_index   |  a_cdr3aa   |   a_v   |  a_j   |    b_cdr3aa     |   b_v    |   b_j   |   label   |
+|:-------------------:|:-----------:|:-------:|:------:|:---------------:|:--------:|:-------:|:---------:|
+| GACTGCGCATCGTCGG-28 | CAGHTGNQFYF | TRAV35	 | TRAJ49 |                 |          |         | IVTDFSVIK |
+| GACTGCGCATCGTCGG-28 |             |         |        | CASSWGGGSHYGYTF | TRBV11-2 | TRBJ1-2 | IVTDFSVIK |
 
 
 #### Paired chain example
 
 A simple wide format
 
-| data_id | a_cdr3aa | a_v | a_j | b_cdr3aa | b_v | b_j | label |
-| :---:   | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
-| GACTGCGCATCGTCGG-28   | CAGHTGNQFYF | TRAV35	 | TRAJ49 | CASSWGGGSHYGYTF | TRBV11-2  | TRBJ1-2 | IVTDFSVIK |
+|       data_id       |  a_cdr3aa   |   a_v   |  a_j   |    b_cdr3aa     |   b_v    |   b_j   |   label   |
+|:-------------------:|:-----------:|:-------:|:------:|:---------------:|:--------:|:-------:|:---------:|
+| GACTGCGCATCGTCGG-28 | CAGHTGNQFYF | TRAV35	 | TRAJ49 | CASSWGGGSHYGYTF | TRBV11-2 | TRBJ1-2 | IVTDFSVIK |
 
  
 ## Running TCRemP
@@ -138,18 +138,22 @@ tcremp-run --input my_input_data.txt --chain TRA_TRB --clstr_model none
 
 The parameters for running ``tcremp-run`` main script are the following:
 
-| parameter | short usage | description | available values | required | default value |
-| --- | --- | --- | --- | --- | --- |
-| --input | -i | input clonotype table  | path to file | yes | - |
-| --chain | -c | single or paired clonotype chains | TRA, TRB, TRA_TRB | yes | - |
-| --output | -o | pipeline output folder | path to directory | no | tcremp_{inputfilename}/ |
-| --cluster-algo | -a | clustering model to be used: dbscan, kmeans or run without clustering step (value 'none') | none, dbscan, kmeans | no | dbscan |
-| --labels-col | -l | name of the input file column with data classes for clustering. If provided, this value will be added to clustering output table and label of each cluster will be defined | str | no | - |
-| --species | -s | species of built-in prototypes to be used | HomoSapiens, (MusMusculus - planned) | no | HomoSapiens |
-| --n-prototypes | -n | number of prototypes to be selected for embedding supplemented prototype table | integer | no | 3000 |
-| --random | -r | random seed for random prototype selection. If not provided or 0, first n prototypes are selected | integer | no | 0 |
-| --prototypes_path | -p | path to the custom input prototype table | path to file | no | - |
-| --clonotype_index | -d | column containing user-provided clonotype id in input data, will be transfered to output tables | str | no | - |
+| parameter                  | short usage   | description                                                                                                                                                                | available values                     | required | default value           |
+|----------------------------|---------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------|--------------------------------------|----------|-------------------------|
+| --input                    | -i            | input clonotype table                                                                                                                                                      | path to file                         | yes      | -                       |
+| --chain                    | -c            | single or paired clonotype chains                                                                                                                                          | TRA, TRB, TRA_TRB                    | yes      | -                       |
+| --output                   | -o            | pipeline output folder                                                                                                                                                     | path to directory                    | no       | tcremp_{inputfilename}/ |
+| --cluster-algo             | -a            | clustering model to be used: dbscan, kmeans or run without clustering step (value 'none')                                                                                  | none, dbscan, kmeans                 | no       | dbscan                  |
+| --labels-col               | -l            | name of the input file column with data classes for clustering. If provided, this value will be added to clustering output table and label of each cluster will be defined | str                                  | no       | -                       |
+| --species                  | -s            | species of built-in prototypes to be used                                                                                                                                  | HomoSapiens, (MusMusculus - planned) | no       | HomoSapiens             |
+| --n-prototypes             | -n            | number of prototypes to be selected for embedding supplemented prototype table                                                                                             | integer                              | no       | 3000                    |
+| --random                   | -r            | random seed for random prototype selection. If not provided or 0, first n prototypes are selected                                                                          | integer                              | no       | 0                       |
+| --prototypes_path          | -p            | path to the custom input prototype table                                                                                                                                   | path to file                         | no       | -                       |
+| --prototypes-cdr3aa-column | -p_cdr3aa_col | name of cdr3aa column for custom file with prototypes. "cdr3aa" will be used if not specified                                                                              | cdr3aa column name                   | no       | cdr3aa                  |
+| --prototypes-cdr3nt-column | -p_cdr3nt_col | name of cdr3nt column for custom file with prototypes. None will be used if not specified                                                                                  | cdr3nt column name                   | no       | -                       |
+| --prototypes-v-column      | -p_v_col      | name of v segment column for custom file with prototypes. "v" will be used if not specified                                                                                | v segment column name                | no       | v                       |
+| --prototypes-j-column      | -p_j_col      | name of j segment column for custom file with prototypes. "j" will be used if not specified                                                                                | j segment column name                | no       | j                       |
+| --clonotype_index          | -d            | column containing user-provided clonotype id in input data, will be transfered to output tables                                                                            | str                                  | no       | -                       |
 
  
 ### Output
@@ -160,16 +164,15 @@ All output files will contain the following **common columns**:
 
 The output folder will contain the following files:
 
-| File name | description |
-| --- | --- |
-| tcremb_dists_{chain}.txt | Embeddings (the set of distances to prototypes) for each input clonotype row in the table, the chain can be: TRA, TRB or TRA_TRB for paired-chain format  |
-| tcremb_pca_{chain}.txt | Principal components of the embedding, the chain can be: TRA, TRB or TRA_TRB for paired-chain format|
-| tcremb_tsne_{chain}.txt | Calculated tSNE co-ordinates for each input clonotype row in the table, the chain can be: TRA, TRB or TRA_TRB for paired-chain format|
-| tcremb_clstr_res_{chain}.txt | Cluster assignments for each input clonotype row in the table. If the cluster is -1, the clonotype does not belong to any cluster (can be treated as “noise” in some settings). Chain can be: TRA, TRB or TRA_TRB for paired data |
-| filtered_out_data.txt | rows that were excluded during data cleansing with exclusion reason |
-| clonotypes_{chain}.txt | Clonotypes used in the single-chain pipeline, chain can be: TRA or TRB |
-| clonotypes_paired_{chain}.txt | Clonotypes used in the paired-chain pipeline |
-| prototypes_{chain}_{n}.txt | prototypes on which the distances was calculated, where ``n`` is the number of selected prototypes, chain is either TRA or TRB. The file is absent if default subset of prototypes was used for calculation |
-| res_{chain}.txt | Raw distance table for single chain mapping. Chain can be: TRA or TRB |
-| res_paired_{chain}.txt | Raw distance table for paired chain mapping. Chain can be: TRA or TRB |
-V
+| File name                     | description                                                                                                                                                                                                                       |
+|-------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| tcremb_dists_{chain}.txt      | Embeddings (the set of distances to prototypes) for each input clonotype row in the table, the chain can be: TRA, TRB or TRA_TRB for paired-chain format                                                                          |
+| tcremb_pca_{chain}.txt        | Principal components of the embedding, the chain can be: TRA, TRB or TRA_TRB for paired-chain format                                                                                                                              |
+| tcremb_tsne_{chain}.txt       | Calculated tSNE co-ordinates for each input clonotype row in the table, the chain can be: TRA, TRB or TRA_TRB for paired-chain format                                                                                             |
+| tcremb_clstr_res_{chain}.txt  | Cluster assignments for each input clonotype row in the table. If the cluster is -1, the clonotype does not belong to any cluster (can be treated as “noise” in some settings). Chain can be: TRA, TRB or TRA_TRB for paired data |
+| filtered_out_data.txt         | rows that were excluded during data cleansing with exclusion reason                                                                                                                                                               |
+| clonotypes_{chain}.txt        | Clonotypes used in the single-chain pipeline, chain can be: TRA or TRB                                                                                                                                                            |
+| clonotypes_paired_{chain}.txt | Clonotypes used in the paired-chain pipeline                                                                                                                                                                                      |
+| prototypes_{chain}_{n}.txt    | prototypes on which the distances was calculated, where ``n`` is the number of selected prototypes, chain is either TRA or TRB. The file is absent if default subset of prototypes was used for calculation                       |
+| res_{chain}.txt               | Raw distance table for single chain mapping. Chain can be: TRA or TRB                                                                                                                                                             |
+| res_paired_{chain}.txt        | Raw distance table for paired chain mapping. Chain can be: TRA or TRB                                                                                                                                                             |
