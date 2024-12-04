@@ -154,6 +154,8 @@ The parameters for running ``tcremp-run`` main script are the following:
 | --prototypes-v-column      | -p_v_col      | name of v segment column for custom file with prototypes. "v" will be used if not specified                                                                                | v segment column name                | no       | v                       |
 | --prototypes-j-column      | -p_j_col      | name of j segment column for custom file with prototypes. "j" will be used if not specified                                                                                | j segment column name                | no       | j                       |
 | --clonotype_index          | -d            | column containing user-provided clonotype id in input data, will be transfered to output tables                                                                            | str                                  | no       | -                       |
+| --lower-len-cdr3           | -llen         | filter out cdr3 with len <llen                                                                                                                                             |                                      |          |                         |
+| --higher-len-cdr3          | -hlen         | filter out cdr3 with len >hlen                                                                                                                                             |                                      |          |                         |
 
  
 ### Output
