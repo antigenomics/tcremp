@@ -302,16 +302,11 @@ class TcrempPipeline:
             res = self.__mir_launch(chain, lib, db, data_parse, nproc, chunk_sz)
             res.to_csv(self.dists_res_path[chain], sep='\t', index=False)
         elif chain == 'TRA_TRB':
-            chain_1 = 'TRA'
-            lib, db, data_parse = self.__data_parse_mirpy(chain_1, self.prototypes_path[chain_1],
-                                                          self.clonotypes_path[chain][chain_1])
-            res = self.__mir_launch(chain, lib, db, data_parse, nproc, chunk_sz)
-            res.to_csv(self.dists_res_path[chain][chain_1], sep='\t', index=False)
-            chain_1 = 'TRB'
-            lib, db, data_parse = self.__data_parse_mirpy(chain_1, self.prototypes_path[chain_1],
-                                                          self.clonotypes_path[chain][chain_1])
-            res = self.__mir_launch(chain, lib, db, data_parse, nproc, chunk_sz)
-            res.to_csv(self.dists_res_path[chain][chain_1], sep='\t', index=False)
+            for currect_chain in ['TRA', 'TRB']:
+                lib, db, data_parse = self.__data_parse_mirpy(currect_chain, self.prototypes_path[currect_chain],
+                                                              self.clonotypes_path[chain][currect_chain])
+                res = self.__mir_launch(chain, lib, db, data_parse, nproc, chunk_sz)
+                res.to_csv(self.dists_res_path[chain][currect_chain], sep='\t', index=False)
 
     def __mir_results_proc(self, chain, res_path_chain, clonotypes_path_chain, clonotype_id_str):
         res_df = pd.read_csv(res_path_chain, sep='\t')
