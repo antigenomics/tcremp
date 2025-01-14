@@ -64,6 +64,7 @@ class TcrempPipeline:
                                   'TRA_TRB': {'TRA': 'cloneId_TRA', 'TRB': 'cloneId_TRB'}}
 
         self.prototypes_path = self.__prototypes_path_subsets[species]
+        # logging.error(self.prototypes_path)
         # self.__prototypes_path = prototypes_path
 
         self.__n_components = 50
@@ -102,34 +103,28 @@ class TcrempPipeline:
         if prototypes_path:
             self.prototypes_path = {'TRA': self.outputs_path + 'prototypes_TRA.txt',
                                     'TRB': self.outputs_path + 'prototypes_TRB.txt'}
-            self.prototypes_prep(prototypes_path,
+            prototypes_count = self.prototypes_prep(prototypes_path,
                                  cdr3aa_column=self.prototypes_cdr3aa_column,
                                  cdr3nt_column=self.prototypes_cdr3nt_column,
                                  v_column=self.prototypes_v_column,
                                  j_column=self.prototypes_j_column)
-
-        if n:
-            new_prototypes_path = {'TRA': self.outputs_path + f'prototypes_TRA_{n}.txt',
-                                   'TRB': self.outputs_path + f'prototypes_TRB_{n}.txt'}
-            # print(new_prototypes_path)
-            try:
-                if prototypes_chain == 'TRA_TRB':
-                    self.process_prototypes_file(n, self.prototypes_path['TRA'], new_prototypes_path['TRA'],
-                                                 random_seed=random_seed)
-                    self.process_prototypes_file(n, self.prototypes_path['TRB'], new_prototypes_path['TRB'],
-                                                 random_seed=random_seed)
-                else:
-                    self.process_prototypes_file(n, self.prototypes_path[prototypes_chain],
-                                                 new_prototypes_path[prototypes_chain],
-                                                 random_seed=random_seed)
-            except ValueError:
-                print('n is greater than number of clonotypes in prototypes file')
-                logging.error('n is greater than number of clonotypes in prototypes file')
-            self.prototypes_path = new_prototypes_path
-            if n * 2 < 50:
-                self.__n_components = n * 2
         else:
-            n = 3000
+            prototypes_count = 3000
+
+        if n is None:
+            n = prototypes_count
+
+        new_prototypes_path = {'TRA': self.outputs_path + f'prototypes_TRA_{n}.txt',
+                               'TRB': self.outputs_path + f'prototypes_TRB_{n}.txt'}
+        try:
+            for x in prototypes_chain.split('_'):
+                self.process_prototypes_file(n, self.prototypes_path[x], new_prototypes_path[x],
+                                             random_seed=random_seed)
+        except ValueError:
+            logging.error('n is greater than number of clonotypes in prototypes file')
+
+        self.prototypes_path = new_prototypes_path
+        self.__n_components = min(n * 2, 50)
 
         self.dist_cols_dist = {'TRA': [f'a_{xs}_{x}' for xs in range(n) for x in ['v', 'j', 'cdr3']],
                                'TRB': [f'b_{xs}_{x}' for xs in range(n) for x in ['v', 'j', 'cdr3']]}
@@ -156,13 +151,22 @@ class TcrempPipeline:
                                                   cdr3nt=cdr3nt_column)
         prototypes = data_proc.filter_segments(prototypes, segments_path=self.segments_path, v=v_column, j=j_column)
 
+        prototypes_count = 0
+
         prototypes_a = prototypes[prototypes['chain'] == 'TRA']
         if len(prototypes_a) > 0:
             prototypes_a.reset_index(drop=True).drop('chain', axis=1).to_csv(self.prototypes_path['TRA'], sep='\t')
+            prototypes_count = len(prototypes_a)
 
         prototypes_b = prototypes[prototypes['chain'] == 'TRB']
         if len(prototypes_b) > 0:
             prototypes_b.reset_index(drop=True).drop('chain', axis=1).to_csv(self.prototypes_path['TRB'], sep='\t')
+            if prototypes_count != 0:
+                assert len(prototypes_a) == len(prototypes_b)
+            else:
+                prototypes_count = len(prototypes_b)
+
+        return prototypes_count
 
     def process_prototypes_file(self, n, old_path, new_path, random_seed=None):
         prototypes_data = pd.read_csv(old_path, sep='\t', index_col=0)
@@ -274,6 +278,7 @@ class TcrempPipeline:
     def __data_parse_mirpy(self, chain, olga_human_path, clonotypes_path):
         start = time.time()
         lib = SegmentLibrary.load_default(genes=chain)
+        print(olga_human_path)
         db = Repertoire.load(parser=parser.ClonotypeTableParser(), path=olga_human_path)
 
         pars = parser.ClonotypeTableParser(lib=lib)
