@@ -5,11 +5,12 @@ import tcremp.data_proc as data_proc
 def validate_prototype_files(p_alpha_file, p_beta_file, p_file, chain, segments_path, prototypes_path,
                              cdr3aa_column='cdr3aa', cdr3nt_column=None, v_column='v', j_column='j'):
     if p_file is not None and (p_alpha_file is not None or p_beta_file is not None):
-        raise ValueError('You should specify iether -p separately from -p_a -p_b params')
+        raise ValueError('You should specify either -p separately from -p_a -p_b params')
     if p_file is not None:
         prototypes = pd.read_csv(p_file, sep='\t')
         if chain == 'TRA_TRB':
-            assert 'chain' in prototypes.columns
+            if not 'chain' in prototypes.columns:
+                raise ValueError('Chain column containing info for prototype chain is mandatory!')
         elif chain == 'TRA':
             prototypes['chain'] = 'TRA'
         elif chain == 'TRB':
@@ -32,7 +33,8 @@ def validate_prototype_files(p_alpha_file, p_beta_file, p_file, chain, segments_
     prototypes = data_proc.filter_clones_data(prototypes, [cdr3aa_column, v_column, j_column],
                                               cdr3nt=cdr3nt_column)
 
-    prototypes = data_proc.filter_segments(prototypes, segments_path=segments_path, v=v_column, j=j_column)
+    prototypes = data_proc.filter_segments(prototypes, segments_path=segments_path,
+                                           v=v_column, j=j_column, chain=chain)
     prototypes_count = 0
 
     prototypes_a = prototypes[prototypes['chain'] == 'TRA']
@@ -46,3 +48,4 @@ def validate_prototype_files(p_alpha_file, p_beta_file, p_file, chain, segments_
         prototypes_count += len(prototypes_b)
 
     return prototypes_count
+

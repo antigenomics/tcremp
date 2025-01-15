@@ -1,3 +1,5 @@
+import logging
+
 import pandas as pd
 import math
 
@@ -16,17 +18,26 @@ def write_filtered_out(df, file_dir, header=None):
                                                                                                   index=False, mode='a')
 
 
-def check_columns(data, tcr_columns):
-    if not set(tcr_columns).issubset(data.columns):
-        raise Exception(f'Incorrect columns names or any column is absent. List of required columns is: {tcr_columns}')
+def check_columns(data, chain, tcr_columns):
+    def validate_inner(column_list):
+        if not set(column_list).issubset(data.columns):
+            raise Exception(f'Incorrect columns names or any column is absent. List of required columns is: {column_list}')
+
+    if chain == 'TRA_TRB':
+        validate_inner(tcr_columns['TRA'] + tcr_columns['TRB'])
+    else:
+        validate_inner(tcr_columns[chain])
 
 
 def clean_at_least_cdr3a_or_cdr3b(data, cdr3a, cdr3b, file_dir=None):
     df = data.copy()
     df['filtered_out'] = df[cdr3a].isna() * df[cdr3b].isna()
+    if df['filtered_out'].sum() > 0:
+        logging.warning(f"filtered out {df['filtered_out'].sum()} rows from input file as both TCR alpha and beta "
+                        f"info are missing")
     if file_dir:
         write_filtered_out(df, file_dir, 'Both a_cdr3aa and b_cdr3aa are None')
-    return df[df['filtered_out'] == False].reset_index(drop=True).drop('filtered_out', axis=1)
+    return df[~df['filtered_out']].reset_index(drop=True).drop('filtered_out', axis=1)
 
 
 # Data processing
@@ -75,13 +86,16 @@ def filter_clones_data(df_clones, tcr_columns, file_dir=None, cdr3nt=None):
 
 
 def filter_segments(df_clones, segments_path='mirpy/mir/resources/segments.txt', v='v', j='j', organism='HomoSapiens',
-                    file_dir=None):
+                    file_dir=None, chain=['TRA', 'TRB']):
     segs = pd.read_csv(segments_path, sep='\t')
     segs = segs[segs['organism'] == organism]
+    segs = segs[segs['id'].apply(lambda x: x[:3] in chain)]
     segs_ids = list(segs['id'].drop_duplicates())
     df = df_clones.copy()
     df['filtered_out'] = -df[v].isin(segs_ids) + df[v].isna() + -df[j].isin(segs_ids) + df[j].isna()
 
+    if sum(df['filtered_out']) > 0:
+        logging.warn(f"Have filtered out {sum(df['filtered_out'])} due to incorrect segments")
     if file_dir:
         write_filtered_out(df, file_dir, 'V or J segment is not present in resource segments list for this species:')
 

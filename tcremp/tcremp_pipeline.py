@@ -76,6 +76,7 @@ class TcrempPipeline:
         self.prototypes_j_column = prototypes_j_column
         self.lower_len_cdr3 = lower_len_cdr3
         self.higher_len_cdr3 = higher_len_cdr3
+        self.chain = prototypes_chain
 
         self.outputs_path = os.path.join(run_name, '')
         Path(self.outputs_path).mkdir(parents=True, exist_ok=True)
@@ -123,7 +124,7 @@ class TcrempPipeline:
                 self.process_prototypes_file(n, self.prototypes_path[x], new_prototypes_path[x],
                                              random_seed=random_seed)
         except ValueError:
-            logging.error('n is greater than number of clonotypes in prototypes file')
+            raise NameError('n is greater than number of clonotypes in prototypes file!')
 
         self.prototypes_path = new_prototypes_path
         self.__n_components = min(n * 2, 50)
@@ -132,7 +133,12 @@ class TcrempPipeline:
                                'TRB': [f'b_{xs}_{x}' for xs in range(n) for x in ['v', 'j', 'cdr3']]}
 
     def check_proc_input_data(self):
-        data_proc.check_columns(self.raw_input_data, self.tcr_columns_paired['TRA'] + self.tcr_columns_paired['TRB'])
+        data_proc.check_columns(self.raw_input_data, self.chain, self.tcr_columns_paired)
+
+        for column in self.tcr_columns_paired['TRA'] + self.tcr_columns_paired['TRB']:
+            if column not in self.raw_input_data:
+                self.raw_input_data[column] = None
+                
         self.input_data = data_proc.clean_at_least_cdr3a_or_cdr3b(self.raw_input_data,
                                                                   self.tcr_columns_paired['TRA'][0],
                                                                   self.tcr_columns_paired['TRB'][0], self.outputs_path)
@@ -140,35 +146,6 @@ class TcrempPipeline:
             self.input_data = data_proc.remove_asterisk(self.input_data, self.tcr_columns_paired[current_chain])
             self.input_data = data_proc.remove_backslash(self.input_data, self.tcr_columns_paired[current_chain])
             self.input_data = data_proc.add_allele(self.input_data, self.tcr_columns_paired[current_chain])
-
-    def prototypes_prep(self, input_file_path, cdr3aa_column, cdr3nt_column, v_column, j_column):
-        if cdr3aa_column is None:
-            cdr3aa_column = 'cdr3aa'
-        if v_column is None:
-            v_column = 'v'
-        if j_column is None:
-            j_column = 'j'
-        prototypes = pd.read_csv(input_file_path, sep='\t')
-        prototypes = data_proc.filter_clones_data(prototypes, [cdr3aa_column, v_column, j_column],
-                                                  cdr3nt=cdr3nt_column)
-        prototypes = data_proc.filter_segments(prototypes, segments_path=self.segments_path, v=v_column, j=j_column)
-
-        prototypes_count = 0
-
-        prototypes_a = prototypes[prototypes['chain'] == 'TRA']
-        if len(prototypes_a) > 0:
-            prototypes_a.reset_index(drop=True).drop('chain', axis=1).to_csv(self.prototypes_path['TRA'], sep='\t')
-            prototypes_count = len(prototypes_a)
-
-        prototypes_b = prototypes[prototypes['chain'] == 'TRB']
-        if len(prototypes_b) > 0:
-            prototypes_b.reset_index(drop=True).drop('chain', axis=1).to_csv(self.prototypes_path['TRB'], sep='\t')
-            if prototypes_count != 0:
-                assert len(prototypes_a) == len(prototypes_b)
-            else:
-                prototypes_count = len(prototypes_b)
-
-        return prototypes_count
 
     def process_prototypes_file(self, n, old_path, new_path, random_seed=None):
         prototypes_data = pd.read_csv(old_path, sep='\t', index_col=0)
@@ -201,18 +178,6 @@ class TcrempPipeline:
             df[self.clonotype_id] = df.groupby(self.tcr_columns_paired['TRA'] + self.tcr_columns_paired['TRB'],
                                                dropna=False).ngroup()
         return df
-
-    def __clonotypes_prep_old(self, clones_df, chain, tcr_columns, clonotype_id_str):
-        clonotypes = clones_df[clones_df['chain'] == chain]
-        clonotypes = clones_df.copy()
-        clonotypes = data_proc.remove_asterisk(clonotypes, tcr_columns)
-        clonotypes = data_proc.remove_backslash(clonotypes, tcr_columns)
-        clonotypes = data_proc.filter_clones_data(clonotypes, tcr_columns)
-        clonotypes = data_proc.filter_segments(clonotypes, segments_path='../mirpy/mirpy/mir/resources/segments.txt',
-                                               organism=self.species)
-
-        clonotypes = clonotypes[tcr_columns + [clonotype_id_str]].drop_duplicates().reset_index(drop=True)
-        return clonotypes
 
     def __clonotypes_prep(self, clones_df, chain):
         clonotypes = clones_df.copy()
@@ -424,8 +389,6 @@ class TcrempPipeline:
                 drop=True)
 
         end = time.time()
-        # self.time_dict[chain]['pca'] = {end - start}
-        # print(f'pca: {end - start}')
         logging.info(f'pca: {end - start}')
 
     def tcremp_tsne(self, chain, ):
