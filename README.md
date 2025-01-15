@@ -30,7 +30,7 @@ Planned features:
 One can simply install the software out-of-the-box using [pip](https://pypi.org/project/pip/) with py3.11:
 
 ```{bash}
-conda create -n tcremp ipython python>=3.11
+conda create -n tcremp ipython python=3.11
 conda activate tcremp
 pip install git+https://github.com/antigenomics/tcremp
 ```
@@ -40,10 +40,12 @@ Or, in case of package version problems or other issues, clone the repository ma
 ```{bash}
 git clone https://github.com/antigenomics/tcremp.git
 cd tcremp
-conda create -n tcremp ipython python>=3.11
+conda create -n tcremp ipython python=3.11
 conda activate tcremp
 pip install .
 ```
+
+If the installation doesn't work for Apple M1-M3 processors install the required libraries yourself.
 
 Check the installation by running:
 

@@ -5,19 +5,19 @@ import argparse, os, sys
 from time import strftime, gmtime
 import logging
 
+from tcremp.arguments import get_arguments
+
 sys.path.append("../")
 sys.path.append("../mirpy/mirpy/")
 from tcremp.tcremp_pipeline import TcrempPipeline
 from tcremp.tcremp_cluster import TcrempClustering
-import tcremp.ml_utils as ml_utils
-import tcremp.data_proc as data_proc
 
 tcr_columns = {'TRA': ['a_cdr3aa', 'a_v', 'a_j'], 'TRB': ['b_cdr3aa', 'b_v', 'b_j'],
                'TRA_TRB': ['a_cdr3aa', 'a_v', 'a_j', 'b_cdr3aa', 'b_v', 'b_j']}
 tcr_columns_flat = ['cdr3aa', 'v', 'j', 'chain']
 clone_label = 'unlabeled'
 clone_index_columns = {'TRA': 'cloneId', 'TRB': 'cloneId', 'TRA_TRB': {'TRA': 'cloneId_TRA', 'TRB': 'cloneId_TRB'}}
-species_glossary = {'homosapiens': 'HomoSapiens', 'human': 'HomoSapiens'}
+species_glossary = {'homosapiens': 'HomoSapiens', 'human': 'HomoSapiens'}  # todo add to readme that works with human only
 
 
 def run_clustering(args, tcremp, output_path, output_columns):
@@ -28,10 +28,10 @@ def run_clustering(args, tcremp, output_path, output_columns):
             clustering.clstr_labels[args.chain][['cluster', "label_cluster", tcremp.annotation_id]])
         clustering.clstr_metrics_calc(args.chain, tcremp)
         ##print(f"purity:{model.clstr_metrics[args.chain]['purity']}")
-        print(f"retention:{clustering.clstr_metrics[args.chain]['retention']}")
-        print(f"f1-score:{clustering.clstr_metrics[args.chain]['f1-score']}")
-        print(f"total pairs TCR-epitope:{clustering.clstr_metrics[args.chain]['total pairs TCR-epitope']}")
-        print(f"total unique epitopes:{clustering.clstr_metrics[args.chain]['total unique epitopes']}")
+        # print(f"retention:{clustering.clstr_metrics[args.chain]['retention']}")
+        # print(f"f1-score:{clustering.clstr_metrics[args.chain]['f1-score']}")
+        # print(f"total pairs TCR-epitope:{clustering.clstr_metrics[args.chain]['total pairs TCR-epitope']}")
+        # print(f"total unique epitopes:{clustering.clstr_metrics[args.chain]['total unique epitopes']}")
         logging.info(f"purity:{clustering.clstr_metrics[args.chain]['purity']}")
         logging.info(f"retention:{clustering.clstr_metrics[args.chain]['retention']}")
         logging.info(f"f1-score:{clustering.clstr_metrics[args.chain]['f1-score']}")
@@ -44,56 +44,7 @@ def run_clustering(args, tcremp, output_path, output_columns):
 
 
 def main():
-    parser = argparse.ArgumentParser(description='General TCRemP pipeline implementation')
-    parser.add_argument('-i', '--input', type=str, required=True,
-                        help='Path to input file containing a clonotype (clone) table')
-    parser.add_argument('-o', '--output', type=str, required=True,
-                        help='Path to the output folder')
-    parser.add_argument('-e', '--prefix', type=str,
-                        help='Output prefix. Defaults to input clonotype table filename')
-    parser.add_argument('-x', '--index-col', type=str,
-                        help='(optional) Name of a column in the input table containing user-specified IDs that will '
-                             'be transfered to output tables')
-    parser.add_argument('-c', '--chain', type=str, required=True,
-                        help='"TRA" or "TRB" for single-chain input data (clonotypes), for paired-chain input ('
-                             'clones) use "TRA_TRB". Used in default prototype set selection')
-    parser.add_argument('-p', '--prototypes-path', type=str,
-                        help='Path to user-specified folder. If not set, will use default pre-built prototype tables, '
-                             '"$tcremp_path/data/data_prebuilt"')
-    parser.add_argument('-p_cdr3aa_col', '--prototypes-cdr3aa-column', type=str,
-                        help='Name of cdr3 column for custom file with prototypes. "cdr3aa" will be used if not '
-                             'specified.')
-    parser.add_argument('-p_cdr3nt_col', '--prototypes-cdr3nt-column', type=str,
-                        help='Name of cdr3nt column for custom file with prototypes. None will be used if not '
-                             'specified.')
-    parser.add_argument('-p_v_col', '--prototypes-v-column', type=str,
-                        help='Name of v column for custom file with prototypes. "v" will be used if not '
-                             'specified.')
-    parser.add_argument('-p_j_col', '--prototypes-j-column', type=str,
-                        help='Name of j column for custom file with prototypes. "j" will be used if not '
-                             'specified.')
-    parser.add_argument('-n', '--n-prototypes', type=int,
-                        help='Number of prototypes to select for clonotype "triangulation" during embedding. The '
-                             'total number of co-ordinates will be (number of chains) * (3 for V, J and CDR3 '
-                             'distances) * (n). Will use all available prototypes if not set')
-    parser.add_argument('-s', '--species', type=str, default='HomoSapiens',
-                        help='Prototype set species specification. Currently only "HomoSapiens" is supported')
-    parser.add_argument('-u', '--unique-clonotypes',
-                        help='Speed-up the analysis by running for unique clonotypes (clones) in the input table')
-    parser.add_argument('-r', '--random-seed', type=int, default=42,
-                        help='Random seed for prototype sampling and other rng-based procedures')
-    parser.add_argument('-a', '--cluster-algo', type=str, default='DBSCAN',
-                        help='Embedding clustering algorithm: "DBSCAN", "K-means" or "None" to skip the step')
-    parser.add_argument('-l', '--labels-col', type=str,
-                        help='(optional) Name of a column in the input table containing clonotype labels. If '
-                             'provided, labels will be transferred to the output and various statistics will be '
-                             'calculated by comparing user-provided labels with inferred cluster labels')
-    parser.add_argument('-llen', '--lower-len-cdr3', type=int, default=5,
-                        help='(optional) filter out cdr3 with len <llen')
-    parser.add_argument('-hlen', '--higher-len-cdr3', type=int, default=30,
-                        help='(optional) filter out cdr3 with len >=hlen')
-
-    args = parser.parse_args()
+    args = get_arguments()
 
     # IO setup
     output_path = Path(args.output)
@@ -108,7 +59,7 @@ def main():
     formatter = logging.Formatter(formatter_str)
     logging.basicConfig(filename=f'{output_path}/{output_prefix}.log',
                         format=formatter_str,
-                        level=logging.DEBUG)
+                        level=logging.DEBUG)  # todo add logging level to cli
 
     handler = logging.StreamHandler(sys.stderr)
     handler.setLevel(logging.DEBUG)
@@ -133,6 +84,7 @@ def main():
     if not species:
         logging.error(f'Bad species "{args.species}"')
         sys.exit('Parameter error')
+
     n_prototypes = args.n_prototypes
     if n_prototypes:
         logging.debug(f'Will use {n_prototypes} prototypes')
@@ -140,6 +92,7 @@ def main():
             logging.warn('More than 3000 prototypes selected, may run very slowly')
     else:
         logging.debug('Will use all available prototypes')
+
     index_col = args.index_col
     if index_col:
         if index_col in data:
@@ -147,6 +100,7 @@ def main():
         else:
             logging.error(f'Index column "{index_col}" is missing in input data')
             sys.exit('Bad input')
+
     label_col = args.labels_col
     if label_col:
         if label_col in data:
@@ -155,11 +109,19 @@ def main():
             logging.error(f'Label column "{label_col}" is missing in input data')
             sys.exit('Bad input')
 
+    if args.prototypes_path and (args.prototypes_path_alpha or args.prototypes_path_beta):
+        logging.error('You should either specify a single file (prototypes_path) with both TCR alpha and beta '
+                      'prototypes or specify separae files for each chain using parameters '
+                      'prototypes_path_alpha/prototypes_path_beta')
+        sys.exit('Bad input')
+
     # Setup pipeline
     pipeline = TcrempPipeline(run_name=output_path,
                               input_data=data,
                               clonotype_index=index_col,
                               prototypes_path=args.prototypes_path,
+                              prototypes_path_beta=args.prototypes_path_beta,
+                              prototypes_path_alpha=args.prototypes_path_alpha,
                               prototypes_cdr3aa_column=args.prototypes_cdr3aa_column,
                               prototypes_cdr3nt_column=args.prototypes_cdr3nt_column,
                               prototypes_v_column=args.prototypes_v_column,
@@ -182,8 +144,8 @@ def main():
         output_columns.append(args.labels_col)
 
     ## count and save dists
-    print('Stage: Distance scores calculation')
-    pipeline.tcremp_dists_count(args.chain)
+    logging.info('Stage: Distance scores calculation')
+    pipeline.tcremp_dists_count(args.chain, nproc=args.nproc)
     pipeline.tcremp_dists(args.chain)
     pipeline.annot[args.chain][output_columns].merge(pipeline.annot_dists[args.chain]).to_csv(
         f'{output_path}tcremp_dists_{args.chain}.txt', sep='\t', index=False)
@@ -191,25 +153,25 @@ def main():
     # dist_df.to_csv(f'{output_path}tcremp_dists_{args.chain}.txt', sep='\t', index=False)
 
     ## pca
-    print('Stage: PCA calculation')
+    logging.info('Stage: PCA calculation')
     pipeline.tcremp_pca(args.chain)
     pipeline.annot[args.chain][output_columns].merge(pipeline.pca[args.chain]).to_csv(
         f'{output_path}tcremp_pca_{args.chain}.txt', sep='\t', index=False)
 
     ## tsne
-    print('Stage: TSNE calculation')
+    logging.info('Stage: TSNE calculation')
     pipeline.tcremp_tsne(args.chain)
     pipeline.annot[args.chain][output_columns].merge(pipeline.tsne[args.chain]).to_csv(
         f'{output_path}tcremp_tsne_{args.chain}.txt', sep='\t', index=False)
 
     if args.cluster_algo != 'none':
         logging.info(f'Clustering with algorithm {args.cluster_algo}')
-        print(f'Stage: Clustering with algorithm {args.cluster_algo}')
+        logging.info(f'Stage: Clustering with algorithm {args.cluster_algo}')
         run_clustering(args, pipeline, output_path, output_columns)
     else:
-        print('Finished without clustering')
+        logging.info('Finished without clustering')
 
-    print(f'Results are in {output_path}')
+    logging.info(f'Results are in {output_path}')
 
 
 if __name__ == '__main__':

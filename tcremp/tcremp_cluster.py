@@ -90,7 +90,7 @@ class TcrempClustering():
 
             self.purity[chain] = ml_utils.count_clstr_purity(self.binom_res[chain])
             #self.silhouette_score[chain] = silhouette_score(X_data, clstr_labels)
-            print(f'purity:{self.purity[chain]}')
+            # print(f'purity:{self.purity[chain]}')
 
         if chain == 'TRA_TRB':
             self.clstr_labels[chain] = pd.merge(self.clstr_labels[chain], data.annot[chain][[self.annotation_id] 

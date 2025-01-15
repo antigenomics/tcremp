@@ -59,13 +59,11 @@ def remove_backslash(data, tcr_columns):
 
 
 def filter_clones_data(df_clones, tcr_columns, file_dir=None, cdr3nt=None):
-    # print(df_clones.shape)
     df = df_clones.copy()
     df['filtered_out'] = df[tcr_columns[0]].isna() + df[tcr_columns[0]].str.contains(',') + df[
         tcr_columns[0]].str.contains('\.') + df[tcr_columns[0]].str.contains('\_') + df[tcr_columns[0]].str.contains(
         '\*') + df[tcr_columns[1]].isna() + df[tcr_columns[1]].str.contains(',') + df[tcr_columns[1]].str.contains(
         '\.') + df[tcr_columns[2]].isna() + df[tcr_columns[2]].str.contains(',') + df[tcr_columns[2]].str.contains('\.')
-
     if cdr3nt:
         df['filtered_out'] = df['filtered_out'] + df[tcr_columns[0]].isna() + df[cdr3nt].str.contains(',') + df[
             cdr3nt].str.contains('\.') + df[cdr3nt].str.contains('\_') + df[cdr3nt].str.contains('\*')
@@ -82,7 +80,7 @@ def filter_segments(df_clones, segments_path='mirpy/mir/resources/segments.txt',
     segs = segs[segs['organism'] == organism]
     segs_ids = list(segs['id'].drop_duplicates())
     df = df_clones.copy()
-    df['filtered_out'] = -df[v].isin(segs_ids) + df[v].isna() + -df[j].isin(segs_ids) + df[v].isna()
+    df['filtered_out'] = -df[v].isin(segs_ids) + df[v].isna() + -df[j].isin(segs_ids) + df[j].isna()
 
     if file_dir:
         write_filtered_out(df, file_dir, 'V or J segment is not present in resource segments list for this species:')

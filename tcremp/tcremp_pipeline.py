@@ -1,5 +1,7 @@
 import sys, os, time, logging, warnings
 
+from tcremp.input_data_validation import validate_prototype_files
+
 warnings.filterwarnings("ignore")
 
 from pathlib import Path
@@ -21,7 +23,8 @@ class TcrempPipeline:
     annotation_id = 'annotId'
     random_state = 7
 
-    def __init__(self, run_name, input_data, clonotype_index=None, prototypes_path=None,
+    def __init__(self, run_name, input_data, clonotype_index=None, prototypes_path=None, prototypes_path_alpha=None,
+                 prototypes_path_beta=None,
                  prototypes_cdr3aa_column=None, prototypes_cdr3nt_column=None, prototypes_v_column=None,
                  prototypes_j_column=None, n=None, species='HomoSapiens',
                  lower_len_cdr3=5, higher_len_cdr3=30,
@@ -48,24 +51,18 @@ class TcrempPipeline:
         self.clsf_labels = {}
 
         self.tcr_columns = ['cdr3aa', 'v', 'j', 'chain']
-        # self.tcr_columns_paired = {'TRA':['a_cdr3aa','TRAV','TRAJ'],'TRB':['b_cdr3aa','TRBV','TRBJ']}
         self.tcr_columns_paired = {'TRA': ['a_cdr3aa', 'a_v', 'a_j'], 'TRB': ['b_cdr3aa', 'b_v', 'b_j']}
-        # self.__rename_tcr_columns_paired = {'TRA':{'a_cdr3aa':'cdr3aa','TRAV':'v','TRAJ':'j','cloneId_TRA':'cloneId'},'TRB':{'b_cdr3aa':'cdr3aa','TRBV':'v','TRBJ':'j','cloneId_TRB':'cloneId'}}
         self.__rename_tcr_columns_paired = {
             'TRA': {'a_cdr3aa': 'cdr3aa', 'a_v': 'v', 'a_j': 'j', 'cloneId_TRA': 'cloneId'},
             'TRB': {'b_cdr3aa': 'cdr3aa', 'b_v': 'v', 'b_j': 'j', 'cloneId_TRB': 'cloneId'}}
         self.clonotype_id = 'cloneId'
         self.clonotyoe_label_id = 'pairId'
         self.input_id = 'inputId'
-        # self.annotation_id = 'annotId'
-        # self.annotation_id = 'id' ## index
         self.annotation_id = 'tcremp_id'  ## index
         self.clonotype_id_dict = {'TRA': 'cloneId', 'TRB': 'cloneId',
                                   'TRA_TRB': {'TRA': 'cloneId_TRA', 'TRB': 'cloneId_TRB'}}
 
         self.prototypes_path = self.__prototypes_path_subsets[species]
-        # logging.error(self.prototypes_path)
-        # self.__prototypes_path = prototypes_path
 
         self.__n_components = 50
 
@@ -100,14 +97,19 @@ class TcrempPipeline:
         self.check_proc_input_data()
         self.input_data = self.__annot_id(self.input_data, self.input_id)
 
-        if prototypes_path:
+        if prototypes_path or prototypes_path_alpha or prototypes_path_beta:
             self.prototypes_path = {'TRA': self.outputs_path + 'prototypes_TRA.txt',
                                     'TRB': self.outputs_path + 'prototypes_TRB.txt'}
-            prototypes_count = self.prototypes_prep(prototypes_path,
-                                 cdr3aa_column=self.prototypes_cdr3aa_column,
-                                 cdr3nt_column=self.prototypes_cdr3nt_column,
-                                 v_column=self.prototypes_v_column,
-                                 j_column=self.prototypes_j_column)
+            prototypes_count = validate_prototype_files(p_alpha_file=prototypes_path_alpha,
+                                                        p_beta_file=prototypes_path_beta,
+                                                        p_file=prototypes_path,
+                                                        chain=prototypes_chain,
+                                                        segments_path=self.segments_path,
+                                                        prototypes_path=self.prototypes_path,
+                                                        cdr3aa_column=self.prototypes_cdr3aa_column,
+                                                        cdr3nt_column=self.prototypes_cdr3nt_column,
+                                                        v_column=self.prototypes_v_column,
+                                                        j_column=self.prototypes_j_column)
         else:
             prototypes_count = 3000
 
@@ -278,7 +280,6 @@ class TcrempPipeline:
     def __data_parse_mirpy(self, chain, olga_human_path, clonotypes_path):
         start = time.time()
         lib = SegmentLibrary.load_default(genes=chain)
-        print(olga_human_path)
         db = Repertoire.load(parser=parser.ClonotypeTableParser(), path=olga_human_path)
 
         pars = parser.ClonotypeTableParser(lib=lib)
@@ -428,15 +429,11 @@ class TcrempPipeline:
         logging.info(f'pca: {end - start}')
 
     def tcremp_tsne(self, chain, ):
-        # print(strftime("%Y-%m-%d %H:%M:%S", gmtime()))
         start = time.time()
         self.tsne[chain] = ml_utils.tsne_proc(self.pca[chain], self.annotation_id, self.__tsne_init,
                                               self.__random_state, self.__tsne_perplexity)
         self.tsne_clones[chain] = ml_utils.tsne_proc(self.pca_clones[chain], self.clonotype_id, self.__tsne_init,
                                                      self.__random_state, self.__tsne_perplexity)
 
-        # print(strftime("%Y-%m-%d %H:%M:%S", gmtime()))
         end = time.time()
-        # self.time_dict[chain]['tsne'] = {end - start}
-        # print(f'tsne: {end - start}')
         logging.info(f'tsne: {end - start}')
