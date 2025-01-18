@@ -1,0 +1,133 @@
+---
+title: "TCREMP and TCRpMHC structures"
+author: "M.S."
+date: "2025-01-18"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+# The optimal way to use bio3d is via MSA
+#if (!require("BiocManager", quietly = TRUE))
+#  install.packages("BiocManager")
+#BiocManager::install("msa")
+#install.packages("devtools")
+#devtools::install_bitbucket("Grantlab/bio3d", subdir = "ver_devel/bio3d/")
+library(reshape2)
+library(bio3d)
+library(tidyverse)
+library(ggplot2)
+```
+
+Fetch list of TCRs and their structures from VDJdb
+
+```{r}
+download.file('https://raw.githubusercontent.com/antigenomics/vdjdb-db/refs/heads/master/chunks/PDB_Database.txt',
+              destfile = "v_tcrpmhc_raw.txt",
+              method = "wget")
+
+vpdb <- read_tsv("v_tcrpmhc_raw.txt") |>
+  mutate(meta.structure.id = ifelse(meta.structure.id == '4E+41',
+                                    "4e41",
+                                    meta.structure.id))
+
+vpdb_meta <- vpdb |>
+  select(mhc.class, clone_id = meta.structure.id) |>
+  unique()
+
+glimpse(vpdb)
+```
+
+Format into AIRR
+
+```{r}
+vpdb <- vpdb |>
+  filter(species == "HomoSapiens") |>
+  pivot_longer(cols = c(v.alpha, j.alpha, cdr3.alpha,
+                        v.beta, j.beta, cdr3.beta)) |>
+  select(meta.structure.id, name, value) |>
+  separate(name, c("variable", "locus")) |>
+  unique() |>
+  pivot_wider(id_cols = c(meta.structure.id, locus), 
+              names_from = variable, 
+              values_from = value) |>
+  rename(clone_id = meta.structure.id, 
+         v_call = v, j_call = j, 
+         junction_aa = cdr3)
+
+write_tsv(vpdb, "v_tcrpmhc.txt")
+glimpse(vpdb)
+```
+
+Download PDB structures
+
+```{r warnings=FALSE}
+pdb_ids <- unique(vpdb$clone_id)
+pdb_files <- get.pdb(pdb_ids, path = "tmp/")
+pdb_files <- pdb_files[endsWith(pdb_files, ".pdb")]
+```
+
+Align, superimpose and get coords. Then compute RMSD
+
+```{r}
+struct_alns <- pdbaln(pdb_files, fit = F, 
+                      ncore = 12, 
+                      exefile = "msa",
+                      maxiters = 256)
+# how coords are organized:
+# (struct_alns$xyz |> matrix(nrow = 4))[1,] |> matrix(nrow = 3) |> t()
+struct_alns_ids <- tools::file_path_sans_ext(basename(struct_alns$id))
+struct_alns_coords <- struct_alns$xyz |> 
+  matrix(nrow = length(struct_alns$id)) |> 
+  t()
+aligned_residues <- apply(struct_alns_coords, 2, \(x) sum(!is.na(x)))
+struct_alns_coords[is.na(struct_alns_coords)] <- 0
+# pairwise distances
+struct_alns_eucl <- struct_alns_coords |>
+  t() |>
+  dist() |> 
+  as.matrix()
+# normalize for number of aligned residues
+struct_alns_rmsd <- t(struct_alns_eucl / sqrt(aligned_residues)) / sqrt(aligned_residues)
+rownames(struct_alns_rmsd) <- struct_alns_ids
+colnames(struct_alns_rmsd) <- struct_alns_ids
+struct_alns_rmsd <- struct_alns_rmsd |>
+  melt()
+colnames(struct_alns_rmsd) <- c("clone_id.from", "clone_id.to", "rmsd")
+struct_alns_rmsd
+```
+Plot RMSD, compare MHCI and MHCII - should be not much difference here 
+due to gaps
+
+```{r}
+struct_alns_rmsd.mhc <- struct_alns_rmsd |>
+  filter(clone_id.from != clone_id.to) |>
+  left_join(vpdb_meta |> 
+              rename(mhc.from = mhc.class, clone_id.from = clone_id)) |>
+  left_join(vpdb_meta |>
+              rename(mhc.to = mhc.class, clone_id.to = clone_id))
+struct_alns_rmsd.mhc <-
+  rbind(struct_alns_rmsd.mhc,
+        struct_alns_rmsd.mhc |>
+          mutate(mhc.tmp = mhc.from,
+                 mhc.from = mhc.to,
+                 mhc.to = mhc.tmp) |>
+          select(-mhc.tmp)) |>
+  unique()
+
+ggplot(struct_alns_rmsd.mhc,
+       aes(x = rmsd)) +
+  geom_density(data = struct_alns_rmsd.mhc |>
+                 select(rmsd),
+               color = NA, fill = "grey") +
+  geom_density(color = "red", fill = NA) +
+  facet_grid(mhc.from ~ mhc.to) +
+  theme_minimal() +
+  theme(aspect.ratio = 1)
+```
+
+```{r}
+#END
+```
