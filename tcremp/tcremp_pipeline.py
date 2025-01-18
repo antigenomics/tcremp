@@ -12,7 +12,7 @@ from mir.common.repertoire import Repertoire
 from mir.common.segments import SegmentLibrary
 from mir.common import parser
 from mir.distances import ClonotypeAligner, GermlineAligner
-from mir.comparative import DenseMatcher
+from mir.comparative.match import DenseMatcher
 from tcremp import get_resource_path
 
 
