@@ -9,16 +9,15 @@ output:
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
+library(reshape2)
+library(tidyverse)
+library(ggplot2)
 # The optimal way to use bio3d is via MSA
-#if (!require("BiocManager", quietly = TRUE))
-#  install.packages("BiocManager")
+#install.packages("BiocManager")
 #BiocManager::install("msa")
 #install.packages("devtools")
 #devtools::install_bitbucket("Grantlab/bio3d", subdir = "ver_devel/bio3d/")
-library(reshape2)
 library(bio3d)
-library(tidyverse)
-library(ggplot2)
 ```
 
 Fetch list of TCRs and their structures from VDJdb
@@ -63,7 +62,7 @@ glimpse(vpdb)
 
 Download PDB structures
 
-```{r warnings=FALSE}
+```{r message=FALSE, warnings=FALSE, R.options=list(max.print=30)}
 pdb_ids <- unique(vpdb$clone_id)
 pdb_files <- get.pdb(pdb_ids, path = "tmp/")
 pdb_files <- pdb_files[endsWith(pdb_files, ".pdb")]
@@ -71,7 +70,7 @@ pdb_files <- pdb_files[endsWith(pdb_files, ".pdb")]
 
 Align, superimpose and get coords. Then compute RMSD
 
-```{r}
+```{r message=FALSE, warnings=FALSE, R.options=list(max.print=30)}
 struct_alns <- pdbaln(pdb_files, fit = F, 
                       ncore = 12, 
                       exefile = "msa",
@@ -96,8 +95,9 @@ colnames(struct_alns_rmsd) <- struct_alns_ids
 struct_alns_rmsd <- struct_alns_rmsd |>
   melt()
 colnames(struct_alns_rmsd) <- c("clone_id.from", "clone_id.to", "rmsd")
-struct_alns_rmsd
+summary(struct_alns_rmsd)
 ```
+
 Plot RMSD, compare MHCI and MHCII - should be not much difference here 
 due to gaps
 
