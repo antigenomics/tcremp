@@ -1,3 +1,4 @@
 tmp/
 aln.fa
 *.Rproj
+.Rhistory
