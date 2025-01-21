@@ -6,9 +6,6 @@ import sys
 import logging
 from pathlib import Path
 
-sys.path.append("../")
-sys.path.append("../mirpy/")
-
 from mir.common.segments import SegmentLibrary
 from mir.common.repertoire import Repertoire
 from mir.common.parser import AIRRParser, DoubleChainAIRRParser
@@ -100,7 +97,7 @@ def main(args):
     logging.info(f'Finished {analysis_repertoire.total} clones in {time.time() - t0}')
     embeddings['clone_id'] = [x.id for x in analysis_repertoire]
     embeddings = embeddings[['clone_id'] + column_names]
-    embeddings.to_csv(f'{output_path}/{output_prefix}_tcremp.tsv', sep='\t')
+    embeddings.to_csv(f'{output_path}/{output_prefix}_tcremp.tsv', sep='\t', index=False)
 
 
 if __name__ == '__main__':
