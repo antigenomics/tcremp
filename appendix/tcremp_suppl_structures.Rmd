@@ -134,7 +134,6 @@ Distances from TCREMP
 
 ```{r}
 tcremp_dists <- read_tsv("v_tcrpmhc_tcremp.tsv")
-glimpse(tcremp_dists)
 
 fetch_dist <- function(dist_type) {
   tcremp_dists |>
@@ -142,7 +141,6 @@ fetch_dist <- function(dist_type) {
     as.matrix() ->
     mat
   rownames(mat) <- tcremp_dists$clone_id
-  print(mat)
   mat |>
     dist() |>
     as.matrix() |>
