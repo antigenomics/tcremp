@@ -121,9 +121,11 @@ ggplot(struct_alns_rmsd.mhc,
        aes(x = rmsd)) +
   geom_density(data = struct_alns_rmsd.mhc |>
                  select(rmsd),
-               color = NA, fill = "grey") +
-  geom_density(color = "red", fill = NA) +
+               color = NA, fill = "#74add1") +
+  geom_density(color = "black", fill = NA, size = 0.25) +
   facet_grid(mhc.from ~ mhc.to) +
+  xlab("RMSD, Å") + 
+  ylab("Fraction of structure pairs") +
   theme_minimal() +
   theme(aspect.ratio = 1)
 ```
@@ -158,23 +160,29 @@ struct_alns_rmsd.mhc.dist <- struct_alns_rmsd.mhc |>
 ```
 
 ```{r}
-roundfactor <- 2.0
+roundfactor <- 5.0
 struct_alns_rmsd.mhc.dist |>
   melt(id.vars = 1:5,
        variable.name = "region",
        value.name = "distance") |>
   filter(clone_id.from > clone_id.to) |>
   mutate(chain = substr(region, 8, 8),
-         rmsd = round(rmsd * roundfactor) / roundfactor) |>
-  mutate(rmsd = ifelse(rmsd >= 5, "5+", signif(rmsd, 1)) |>
+         rmsdr = round(rmsd * roundfactor, 0) / roundfactor) |>
+  mutate(rmsdr = ifelse(rmsdr > 3, "4+", signif(rmsdr, 1)) |>
            as.factor()) |>
-  ggplot(aes(x = rmsd, 
-             group = rmsd, 
-             y = distance)) +
-  geom_boxplot() +
-  facet_wrap(chain ~ region, scales = "free") +
+  ggplot(aes(x = rmsdr, 
+             group = rmsdr, 
+             y = distance,
+             fill = chain)) +
+  geom_boxplot(alpha = 0.7, size = 0.3, outlier.size = 1.0, 
+               outlier.shape = "-") +
+  xlab("RMSD, Å") + 
+  ylab("TCREMP distance") +
+  facet_wrap(. ~ region, scales = "free") +
+  scale_fill_brewer(guide = F, palette = "Set1") +
   theme_minimal() +
-  theme(aspect.ratio = 1)
+  theme(aspect.ratio = 1,
+        axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
 ```
 
 ```{r}
