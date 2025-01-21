@@ -128,6 +128,55 @@ ggplot(struct_alns_rmsd.mhc,
   theme(aspect.ratio = 1)
 ```
 
+Distances from TCREMP
+
+```{r}
+tcremp_dists <- read_tsv("v_tcrpmhc_tcremp.tsv")
+glimpse(tcremp_dists)
+
+fetch_dist <- function(dist_type) {
+  tcremp_dists |>
+    select(ends_with(dist_type)) |>
+    as.matrix() ->
+    mat
+  rownames(mat) <- tcremp_dists$clone_id
+  print(mat)
+  mat |>
+    dist() |>
+    as.matrix() |>
+    melt(value.name = paste0("tcremp_", dist_type)) |>
+    rename(clone_id.from = Var1, clone_id.to = Var2)
+}
+
+struct_alns_rmsd.mhc.dist <- struct_alns_rmsd.mhc |>
+  left_join(fetch_dist("a_v")) |>
+  left_join(fetch_dist("a_cdr3")) |>
+  left_join(fetch_dist("a_j")) |>
+  left_join(fetch_dist("b_v")) |>
+  left_join(fetch_dist("b_cdr3")) |>
+  left_join(fetch_dist("b_j"))
+```
+
+```{r}
+roundfactor <- 2.0
+struct_alns_rmsd.mhc.dist |>
+  melt(id.vars = 1:5,
+       variable.name = "region",
+       value.name = "distance") |>
+  filter(clone_id.from > clone_id.to) |>
+  mutate(chain = substr(region, 8, 8),
+         rmsd = round(rmsd * roundfactor) / roundfactor) |>
+  mutate(rmsd = ifelse(rmsd >= 5, "5+", signif(rmsd, 1)) |>
+           as.factor()) |>
+  ggplot(aes(x = rmsd, 
+             group = rmsd, 
+             y = distance)) +
+  geom_boxplot() +
+  facet_wrap(chain ~ region, scales = "free") +
+  theme_minimal() +
+  theme(aspect.ratio = 1)
+```
+
 ```{r}
 #END
 ```
