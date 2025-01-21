@@ -27,11 +27,6 @@ def run_clustering(args, tcremp, output_path, output_columns):
         df = tcremp.annot[args.chain][output_columns].merge(
             clustering.clstr_labels[args.chain][['cluster', "label_cluster", tcremp.annotation_id]])
         clustering.clstr_metrics_calc(args.chain, tcremp)
-        ##print(f"purity:{model.clstr_metrics[args.chain]['purity']}")
-        # print(f"retention:{clustering.clstr_metrics[args.chain]['retention']}")
-        # print(f"f1-score:{clustering.clstr_metrics[args.chain]['f1-score']}")
-        # print(f"total pairs TCR-epitope:{clustering.clstr_metrics[args.chain]['total pairs TCR-epitope']}")
-        # print(f"total unique epitopes:{clustering.clstr_metrics[args.chain]['total unique epitopes']}")
         logging.info(f"purity:{clustering.clstr_metrics[args.chain]['purity']}")
         logging.info(f"retention:{clustering.clstr_metrics[args.chain]['retention']}")
         logging.info(f"f1-score:{clustering.clstr_metrics[args.chain]['f1-score']}")
@@ -78,6 +73,10 @@ def main():
 
     for col in data.columns:
         data[col] = data[col].astype('str')
+
+    if args.n_clonotypes:
+        data = data.head(args.n_clonotypes)
+        logging.info(f'Selected n={args.n_clonotypes} first lines from data file.')
 
     # Check remaining parameters
     species = species_glossary.get(str(args.species).lower())

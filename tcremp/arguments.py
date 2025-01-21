@@ -51,6 +51,10 @@ def get_arguments():
                              'total number of co-ordinates will be (number of chains) * (3 for V, J and CDR3 '
                              'distances) * (n). Will use all available prototypes if not set')
 
+    parser.add_argument('-nc', '--n-clonotypes', type=int,
+                        help='Number of clonotypes to process in the pipeline. Will use all available clonotypes'
+                             ' if not set')
+
     parser.add_argument('-s', '--species', type=str, default='HomoSapiens',
                         help='Prototype set species specification. Currently only "HomoSapiens" is supported')
 

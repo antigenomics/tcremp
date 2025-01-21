@@ -97,7 +97,6 @@ class TcrempPipeline:
         self.raw_input_data = input_data.copy()
         self.check_proc_input_data()
         self.input_data = self.__annot_id(self.input_data, self.input_id)
-
         if prototypes_path or prototypes_path_alpha or prototypes_path_beta:
             self.prototypes_path = {'TRA': self.outputs_path + 'prototypes_TRA.txt',
                                     'TRB': self.outputs_path + 'prototypes_TRB.txt'}
@@ -119,18 +118,12 @@ class TcrempPipeline:
 
         new_prototypes_path = {'TRA': self.outputs_path + f'prototypes_TRA_{n}.txt',
                                'TRB': self.outputs_path + f'prototypes_TRB_{n}.txt'}
-        try:
-            for x in prototypes_chain.split('_'):
-                self.process_prototypes_file(n, self.prototypes_path[x], new_prototypes_path[x],
-                                             random_seed=random_seed)
-        except ValueError:
-            raise NameError('n is greater than number of clonotypes in prototypes file!')
+        self.n_prototypes = {}
+        for x in prototypes_chain.split('_'):
+            self.n_prototypes[x] = self.process_prototypes_file(n, self.prototypes_path[x], new_prototypes_path[x],
+                                         random_seed=random_seed)
 
         self.prototypes_path = new_prototypes_path
-        self.__n_components = min(n * 2, 50)
-
-        self.dist_cols_dist = {'TRA': [f'a_{xs}_{x}' for xs in range(n) for x in ['v', 'j', 'cdr3']],
-                               'TRB': [f'b_{xs}_{x}' for xs in range(n) for x in ['v', 'j', 'cdr3']]}
 
     def check_proc_input_data(self):
         data_proc.check_columns(self.raw_input_data, self.chain, self.tcr_columns_paired)
@@ -149,7 +142,7 @@ class TcrempPipeline:
 
     def process_prototypes_file(self, n, old_path, new_path, random_seed=None):
         prototypes_data = pd.read_csv(old_path, sep='\t', index_col=0)
-        if random_seed is not None and len(prototypes_data) != n:
+        if random_seed is not None and len(prototypes_data) > n:
             prototypes_data = prototypes_data.sample(n=n, random_state=random_seed)
         else:
             prototypes_data = prototypes_data.iloc[:n]
@@ -158,6 +151,7 @@ class TcrempPipeline:
                      self.prototypes_j_column: 'j',
                      self.prototypes_cdr3aa_column: 'cdr3aa'}).reset_index(
             drop=True).to_csv(new_path, sep='\t')
+        return len(prototypes_data)
 
     def __annot_id(self, data, annotation_id_str):
         df = data.copy()
@@ -212,6 +206,7 @@ class TcrempPipeline:
 
             data_tt = data_tt[data_tt[self.clonotype_id].isin(self.clonotypes[chain][self.clonotype_id])]
             self.annot_input[chain] = self.__annot_id(data_tt, self.annotation_id)
+
         elif chain == 'TRA_TRB':
             data_tt = data_tt[~data_tt[self.tcr_columns_paired['TRA'][0]].isna()].reset_index(drop=True)
             data_tt = data_tt[~data_tt[self.tcr_columns_paired['TRB'][0]].isna()].reset_index(drop=True)
@@ -234,13 +229,19 @@ class TcrempPipeline:
                     self.clonotypes[chain][current_chain][self.clonotype_id])]
 
             self.annot_input[chain] = self.__annot_id(data_tt.reset_index(drop=True), self.annotation_id)
-
         else:
             # print('Error. Chain is incorrect. Must be TRA, TRB or TRA_TRB')
             logging.error('Error. Chain is incorrect. Must be TRA, TRB or TRA_TRB')
 
         end = time.time()
-        logging.info(f'Clonotypes extraction time: {end - start}')
+        num_samples = sum([len(x) for x in self.annot_input.values()])
+        logging.info(f'Clonotypes extraction time: {end - start}, {num_samples}')
+
+        self.__n_components = min(min(sum(self.n_prototypes.values()), 50), num_samples)  # todo why mul by 2?
+        logging.warning(f'set n comp to {self.__n_components}')
+
+        self.dist_cols_dist = {'TRA': [f'a_{xs}_{x}' for xs in range(self.n_prototypes['TRA'] if 'TRA' in self.n_prototypes else 0) for x in ['v', 'j', 'cdr3']],
+                               'TRB': [f'b_{xs}_{x}' for xs in range(self.n_prototypes['TRB'] if 'TRB' in self.n_prototypes else 0) for x in ['v', 'j', 'cdr3']]}
 
     def __data_parse_mirpy(self, chain, olga_human_path, clonotypes_path):
         start = time.time()
@@ -250,6 +251,7 @@ class TcrempPipeline:
         pars = parser.ClonotypeTableParser(lib=lib)
 
         data_parse = pars.parse(source=clonotypes_path)
+        print(data_parse)
         data_parse = [x for x in data_parse if len(x.cdr3aa) in range(self.lower_len_cdr3, self.higher_len_cdr3)]
 
         end = time.time()
@@ -270,12 +272,14 @@ class TcrempPipeline:
         if chain == 'TRA' or chain == 'TRB':
             lib, db, data_parse = self.__data_parse_mirpy(chain, self.prototypes_path[chain],
                                                           self.clonotypes_path[chain])
+            print(lib, db, data_parse)
             res = self.__mir_launch(chain, lib, db, data_parse, nproc, chunk_sz)
             res.to_csv(self.dists_res_path[chain], sep='\t', index=False)
         elif chain == 'TRA_TRB':
             for currect_chain in ['TRA', 'TRB']:
                 lib, db, data_parse = self.__data_parse_mirpy(currect_chain, self.prototypes_path[currect_chain],
                                                               self.clonotypes_path[chain][currect_chain])
+                print(lib, db, data_parse)
                 res = self.__mir_launch(chain, lib, db, data_parse, nproc, chunk_sz)
                 res.to_csv(self.dists_res_path[chain][currect_chain], sep='\t', index=False)
 
@@ -335,10 +339,7 @@ class TcrempPipeline:
         else:
             logging.error('Error. Chain is incorrect. Must be TRA, TRB or TRA_TRB')
 
-        # print(strftime("%Y-%m-%d %H:%M:%S", gmtime()))
         end = time.time()
-        # self.time_dict[chain]['dist_proc'] = {end - start}
-        # print(f'dist_proc: {end - start}')
         logging.info(f'dist_proc: {end - start}')
 
     def tcremp_pca(self, chain, n_components=None):

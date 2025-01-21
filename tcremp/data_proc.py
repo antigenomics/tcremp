@@ -93,9 +93,9 @@ def filter_segments(df_clones, segments_path='mirpy/mir/resources/segments.txt',
     segs_ids = list(segs['id'].drop_duplicates())
     df = df_clones.copy()
     df['filtered_out'] = -df[v].isin(segs_ids) + df[v].isna() + -df[j].isin(segs_ids) + df[j].isna()
-
     if sum(df['filtered_out']) > 0:
         logging.warn(f"Have filtered out {sum(df['filtered_out'])} due to incorrect segments")
+        logging.warn(f'{df[df.filtered_out]}')
     if file_dir:
         write_filtered_out(df, file_dir, 'V or J segment is not present in resource segments list for this species:')
 

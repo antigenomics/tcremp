@@ -1,0 +1,12 @@
+input,output,chain,prototypes_path,prototypes_path_alpha,prototypes_path_beta,prototypes_cdr3aa_column,prototypes_cdr3nt_column,prototypes_v_column,prototypes_j_column,n_prototypes,species,unique_clonotypes,Cluster Algo,NProc,labels_column,lower_len_cdr3,higher_len_cdr3,n_clonotypes
+test_data/VDJdb_data_paired_example.csv,tmp,TRB,test_data/prototypes_tra_trb.txt,,,cdr3aa,cdr3nt,v,j,,homosapiens,True,,,,11,20,100
+test_data/VDJdb_data_paired_example.csv,tmp,TRA,,test_data/prototypes_tra.tsv,,cdr3aa,cdr3nt,v,j,,homosapiens,False,,,,5,10,100
+test_data/VDJdb_data_paired_example.csv,tmp,TRA_TRB,,test_data/prototypes_tra.tsv,test_data/prototypes_trb.tsv,cdr3aa,cdr3nt,v,j,30,homosapiens,False,,,,5,20,100
+test_data/VDJdb_data_paired_example.csv,tmp,TRB,test_data/prototypes_tra_trb.txt,,,cdr3aa,cdr3nt,v,j,30,homosapiens,True,,,,5,10,100
+test_data/VDJdb_data_paired_example.csv,tmp,TRB,test_data/prototypes_tra_trb.txt,,,cdr3aa,cdr3nt,v,j,10,homosapiens,False,,,,5,10,100
+test_data/VDJdb_data_paired_example.csv,tmp,TRA,,test_data/prototypes_tra.tsv,,cdr3aa,cdr3nt,v,j,30,homosapiens,True,,,,11,20,100
+test_data/VDJdb_data_paired_example.csv,tmp,TRA_TRB,,test_data/prototypes_tra.tsv,test_data/prototypes_trb.tsv,cdr3aa,cdr3nt,v,j,10,homosapiens,True,,,,11,20,100
+test_data/VDJdb_data_paired_example.csv,tmp,TRA,test_data/prototypes_tra_trb.txt,,,cdr3aa,cdr3nt,v,j,10,homosapiens,False,,,,11,20,100
+test_data/VDJdb_data_paired_example.csv,tmp,TRA_TRB,test_data/prototypes_tra_trb.txt,,,cdr3aa,cdr3nt,v,j,,homosapiens,False,,,,5,10,100
+test_data/VDJdb_data_paired_example.csv,tmp,TRB,,,test_data/prototypes_trb.tsv,cdr3aa,cdr3nt,v,j,,homosapiens,False,,,,11,20,100
+test_data/VDJdb_data_paired_example.csv,tmp,TRA,test_data/prototypes_tra_trb.txt,,,cdr3aa,cdr3nt,v,j,,homosapiens,False,,,,5,20,100

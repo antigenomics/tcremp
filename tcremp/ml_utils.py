@@ -1,3 +1,5 @@
+import logging
+
 import numpy as np
 import pandas as pd
 from scipy import stats
@@ -39,7 +41,8 @@ colors = ['red', 'cyan', 'lime', 'darkgreen', 'gold', 'pink', 'lightsalmon', 'ye
 
 def pca_proc(res_df, id_column='id', n_components=100, plot=False):
     data_proc = res_df.drop(id_column, axis=1, errors='ignore')
-    pca = PCA(n_components=n_components)
+    logging.info(data_proc)
+    pca = PCA(n_components=min([n_components, data_proc.shape[0], data_proc.shape[1]]))
     pca.fit(StandardScaler().fit_transform(data_proc))
 
     if plot:

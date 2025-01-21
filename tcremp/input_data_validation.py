@@ -30,6 +30,10 @@ def validate_prototype_files(p_alpha_file, p_beta_file, p_file, chain, segments_
     prototypes[v_column] = prototypes[v_column].apply(lambda x: x + '*01' if '*' not in x else x)
     prototypes[j_column] = prototypes[j_column].apply(lambda x: x + '*01' if '*' not in x else x)
 
+    prototypes = data_proc.remove_asterisk(prototypes, [cdr3aa_column, v_column, j_column])
+    prototypes = data_proc.remove_backslash(prototypes, [cdr3aa_column, v_column, j_column])
+    prototypes = data_proc.add_allele(prototypes, [cdr3aa_column, v_column, j_column])
+
     prototypes = data_proc.filter_clones_data(prototypes, [cdr3aa_column, v_column, j_column],
                                               cdr3nt=cdr3nt_column)
 
