@@ -30,9 +30,15 @@ def get_arguments():
                              'total number of co-ordinates will be (number of chains) * (3 for V, J and CDR3 '
                              'distances) * (n). Will use all available prototypes if not set')  # ++
 
+    parser.add_argument('-sample_random_p', '--sample-random-prototypes', type=bool, default=False,
+                        help='Whether to sample the prototypes randomly or not')  # ++
+
     parser.add_argument('-nc', '--n-clonotypes', type=int,
                         help='Number of clonotypes to process in the pipeline. Will use all available clonotypes'
                              ' if not set')  # ++
+
+    parser.add_argument('-sample_random_c', '--sample-random-clonotypes', type=bool, default=False,
+                        help='Whether to sample the clonotypes randomly or not')  # ++
 
     parser.add_argument('-s', '--species', type=str, default='HomoSapiens',
                         choices=['HomoSapiens', 'MusMusculus', 'MacacaMulatta'],
@@ -42,7 +48,7 @@ def get_arguments():
                         help='Speed-up the analysis by running for unique clonotypes (clones) in the input table')  # +
 
     parser.add_argument('-r', '--random-seed', type=int, default=42,
-                        help='Random seed for prototype sampling and other rng-based procedures')  # +
+                        help='Random seed for prototype sampling and other rng-based procedures')  # ++
 
     parser.add_argument('-a', '--cluster-algo', type=str, default='DBSCAN',
                         help='Embedding clustering algorithm: "DBSCAN", "K-means" or "None" to skip the step') # -

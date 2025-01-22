@@ -5,31 +5,23 @@
 #############################################################
 
 
-Input: valid
-Index column: Ids
+input: valid
+output: tmp
+index_col: None, clone_id
 chain: TRA, TRB, TRA_TRB
-prototypes_path: Set, None
-prototypes_path_alpha: Set, None
-prototypes_path_beta: Set, None
-prototypes_cdr3aa_column: cdr3aa
-prototypes_cdr3nt_column: cdr3nt
-prototypes_v_column: v
-prototypes_j_column: j
-n_prototypes: None, 10, 1000
-species: homosapiens
+prototypes_path: test_data/tcremp_prototypes_olga_test.tsv
+n_prototypes: None, 10, 100, 1000
+n_clonotypes: None, 10, 100, 1000
+sample_random_prototypes: True, False
+sample_random_clonotypes: True, False
+random_seed: None, 10
+species: HomoSapiens
 unique_clonotypes: True, False
-Cluster Algo: None
-NProc: None
-labels_column: None
 lower_len_cdr3: 5, 11
 higher_len_cdr3: 10, 20
 
-if [chain] = "TRA" then [prototypes_path_beta] = "None" AND ([prototypes_path_alpha] = "Set" OR [prototypes_path] = "Set");
 
-if [chain] = "TRB" then [prototypes_path_alpha] = "None"  AND ([prototypes_path_beta] = "Set" OR [v] = "Set");
-
-if [chain] = "TRA_TRB" AND [prototypes_path] = "Set" then ([prototypes_path_beta] = "None" AND [prototypes_path_alpha] = "None");
-if [chain] = "TRA_TRB" AND [prototypes_path] = "None" then ([prototypes_path_beta] = "Set" AND [prototypes_path_alpha] = "Set");
+if [chain] = "TRA_TRB" then [index_column] = "clone_id";
 
 [lower_len_cdr3] <= [higher_len_cdr3];
 

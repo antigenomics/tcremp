@@ -114,8 +114,12 @@ def main(args):
                                                                llen=args.lower_len_cdr3,
                                                                hlen=args.higher_len_cdr3)
 
-    analysis_repertoire = analysis_repertoire.sample_n(n=args.n_clonotypes)
-    proto_repertoire = proto_repertoire.sample_n(n=args.n_prototypes)
+    analysis_repertoire = analysis_repertoire.sample_n(n=args.n_clonotypes,
+                                                       sample_random=args.sample_random_prototypes,
+                                                       random_seed=args.random_seed)
+    proto_repertoire = proto_repertoire.sample_n(n=args.n_prototypes,
+                                                 sample_random=args.sample_random_clonotypes,
+                                                 random_seed=args.random_seed)
 
     logging.info('Processed input clonotype and prototype data. ')
     logging.info(f'There are {analysis_repertoire.total} analysis clonotypes and {proto_repertoire.total} prototypes.')
