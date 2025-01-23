@@ -7,6 +7,7 @@ name = "tcremp"
 version = "0.0.1"
 authors = [
   { name="yuliajk", email="yulia.mow@gmail.com" },
+  { name="vek239", email="elizaveta.k.vlasova@gmail.com" },
   { name="mikessh", email="mikhail.shugay@gmail.com" },
 ]
 description = "A library prototype-based T-cell receptor (TCR) sequence embedding"

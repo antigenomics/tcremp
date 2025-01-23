@@ -1,55 +1,20 @@
+import time
 import pandas as pd
-import numpy as np
-from pathlib import Path, PurePath
-import argparse, os, sys
-from time import strftime, gmtime
+import sys
 import logging
+from pathlib import Path
 
+from mir.common.segments import SegmentLibrary
+from mir.common.repertoire import Repertoire
+from mir.common.parser import AIRRParser, DoubleChainAIRRParser
+from mir.embedding.prototype_embedding import PrototypeEmbedding
+from mir.distances.aligner import ClonotypeAligner
+
+from tcremp import get_resource_path
 from tcremp.arguments import get_arguments
 
-sys.path.append("../")
-sys.path.append("../mirpy/mirpy/")
-from tcremp.tcremp_pipeline import TcrempPipeline
-from tcremp.tcremp_cluster import TcrempClustering
 
-tcr_columns = {'TRA': ['a_cdr3aa', 'a_v', 'a_j'], 'TRB': ['b_cdr3aa', 'b_v', 'b_j'],
-               'TRA_TRB': ['a_cdr3aa', 'a_v', 'a_j', 'b_cdr3aa', 'b_v', 'b_j']}
-tcr_columns_flat = ['cdr3aa', 'v', 'j', 'chain']
-clone_label = 'unlabeled'
-clone_index_columns = {'TRA': 'cloneId', 'TRB': 'cloneId', 'TRA_TRB': {'TRA': 'cloneId_TRA', 'TRB': 'cloneId_TRB'}}
-species_glossary = {'homosapiens': 'HomoSapiens', 'human': 'HomoSapiens'}  # todo add to readme that works with human only
-
-
-def run_clustering(args, tcremp, output_path, output_columns):
-    clustering = TcrempClustering(algo_name=args.cluster_algo)
-    clustering.build_clusters(chain=args.chain, data=tcremp, label_cl=args.labels_col)
-    if args.labels_col:
-        df = tcremp.annot[args.chain][output_columns].merge(
-            clustering.clstr_labels[args.chain][['cluster', "label_cluster", tcremp.annotation_id]])
-        clustering.clstr_metrics_calc(args.chain, tcremp)
-        logging.info(f"purity:{clustering.clstr_metrics[args.chain]['purity']}")
-        logging.info(f"retention:{clustering.clstr_metrics[args.chain]['retention']}")
-        logging.info(f"f1-score:{clustering.clstr_metrics[args.chain]['f1-score']}")
-        logging.info(f"total pairs TCR-epitope:{clustering.clstr_metrics[args.chain]['total pairs TCR-epitope']}")
-        logging.info(f"total unique epitopes:{clustering.clstr_metrics[args.chain]['total unique epitopes']}")
-    else:
-        df = tcremp.annot[args.chain][output_columns].merge(
-            clustering.clstr_labels[args.chain][['cluster', tcremp.annotation_id]])
-    df.to_csv(f'{output_path}tcremp_clstr_res_{args.chain}.txt', sep='\t', index=False)
-
-
-def main():
-    args = get_arguments()
-
-    # IO setup
-    output_path = Path(args.output)
-    output_path.mkdir(parents=True, exist_ok=True)
-    input_path = Path(args.input)
-    output_prefix = args.prefix
-    if not output_prefix:
-        output_prefix = input_path.stem
-
-    # Logging
+def configure_logging(input_path, output_path, output_prefix):
     formatter_str = '[%(asctime)s\t%(name)s\t%(levelname)s] %(message)s'
     formatter = logging.Formatter(formatter_str)
     logging.basicConfig(filename=f'{output_path}/{output_prefix}.log',
@@ -61,116 +26,127 @@ def main():
     handler.setFormatter(formatter)
     logging.getLogger().addHandler(handler)
     logging.info(
-        f'Running TCRemP for i="{input_path.resolve()}", writing to o="{output_path.resolve()}/" under prefix="{output_prefix}"')
+        f'Running TCRemP for i="{input_path}", writing to o="{output_path.resolve()}/" under prefix="{output_prefix}"')
 
-    # Load input
-    if not input_path.is_file:
-        logging.error(f'Missing input file "{input_path}"')
-        sys.exit('Parameter error')
-    logging.info("Loading data and initializing the pipeline")
 
-    data = pd.read_csv(input_path, sep='\t')
+def configure_io(args):
+    # IO setup
+    output_path = Path(args.output)
+    output_path.mkdir(parents=True, exist_ok=True)
+    input_path = Path(args.input)
+    proto_path = Path(args.prototypes_path if args.prototypes_path else get_resource_path('tcremp_prototypes_olga.tsv'))
+    output_prefix = args.prefix
+    if not output_prefix:
+        output_prefix = Path(input_path).stem
+    return str(input_path.resolve()), output_path, output_prefix, str(proto_path.resolve())
 
-    for col in data.columns:
-        data[col] = data[col].astype('str')
 
-    if args.n_clonotypes:
-        data = data.head(args.n_clonotypes)
-        logging.info(f'Selected n={args.n_clonotypes} first lines from data file.')
+def validate_cdr3_len(repertoire: Repertoire, llen: int, hlen: int, single_chain):
+    if llen is None:
+        llen = -1
+    if hlen is None:
+        hlen = 35
 
-    # Check remaining parameters
-    species = species_glossary.get(str(args.species).lower())
-    if not species:
-        logging.error(f'Bad species "{args.species}"')
-        sys.exit('Parameter error')
-
-    n_prototypes = args.n_prototypes
-    if n_prototypes:
-        logging.debug(f'Will use {n_prototypes} prototypes')
-        if n_prototypes > 3000:
-            logging.warn('More than 3000 prototypes selected, may run very slowly')
-    else:
-        logging.debug('Will use all available prototypes')
-
-    index_col = args.index_col
-    if index_col:
-        if index_col in data:
-            logging.debug(f'Using {index_col} as clonotype index')
+    def create_len_function(single_chain):
+        if single_chain:
+            return lambda x: llen <= len(x.cdr3aa) < hlen
         else:
-            logging.error(f'Index column "{index_col}" is missing in input data')
-            sys.exit('Bad input')
+            return lambda x: llen <= len(x.chainA.cdr3aa) < hlen and llen <= len(x.chainB.cdr3aa) < hlen
 
-    label_col = args.labels_col
-    if label_col:
-        if label_col in data:
-            logging.debug(f'Using {label_col} as clonotype labels')
-        else:
-            logging.error(f'Label column "{label_col}" is missing in input data')
-            sys.exit('Bad input')
+    logging.info(f'Filtering: {llen} <= cdr3_len < {hlen}')
+    len_function = create_len_function(single_chain)
 
-    if args.prototypes_path and (args.prototypes_path_alpha or args.prototypes_path_beta):
-        logging.error('You should either specify a single file (prototypes_path) with both TCR alpha and beta '
-                      'prototypes or specify separae files for each chain using parameters '
-                      'prototypes_path_alpha/prototypes_path_beta')
-        sys.exit('Bad input')
+    filtered_repertoire = repertoire.subsample_by_lambda(lambda x: not len_function(x))
+    if filtered_repertoire.total > 0:
+        for c in filtered_repertoire:
+            logging.warning(f'Filtered out clonotype with id {c.id} {c} due to length filter')
 
-    # Setup pipeline
-    pipeline = TcrempPipeline(run_name=output_path,
-                              input_data=data,
-                              clonotype_index=index_col,
-                              prototypes_path=args.prototypes_path,
-                              prototypes_path_beta=args.prototypes_path_beta,
-                              prototypes_path_alpha=args.prototypes_path_alpha,
-                              prototypes_cdr3aa_column=args.prototypes_cdr3aa_column,
-                              prototypes_cdr3nt_column=args.prototypes_cdr3nt_column,
-                              prototypes_v_column=args.prototypes_v_column,
-                              prototypes_j_column=args.prototypes_j_column,
-                              n=n_prototypes,
-                              species=species,
-                              prototypes_chain=args.chain,
-                              lower_len_cdr3=args.lower_len_cdr3,
-                              higher_len_cdr3=args.higher_len_cdr3,
-                              random_seed=args.random_seed)
+    return repertoire.subsample_by_lambda(len_function)
 
-    logging.info("Checking input and extracting clonotypes")
-    pipeline.tcremp_clonotypes(args.chain, args.unique_clonotypes)
 
-    ## output columns
-    output_columns = [pipeline.annotation_id, pipeline.clonotype_id] + tcr_columns[args.chain]
-    if pipeline.clonotype_index:
-        output_columns.append(pipeline.clonotype_index)
-    if args.labels_col:
-        output_columns.append(args.labels_col)
+def load_mirpy_objects(segment_library, data_path, proto_path, locus=None,
+                       mapping_column=None, llen=None, hlen=None):
+    parser = AIRRParser(lib=segment_library,
+                        locus=locus) if locus is not None else DoubleChainAIRRParser(lib=segment_library,
+                                                                                     mapping_column=mapping_column)
+    logging.info('Started loading clonotypes for analysis into MIR object.')
+    analysis_repertoire = Repertoire.load(
+        parser=parser,
+        path=data_path,
+    )
+    analysis_repertoire = validate_cdr3_len(analysis_repertoire, llen, hlen, locus is not None)
+    logging.info('Started loading prototypes into MIR object.')
+    proto_repertoire = Repertoire.load(
+        parser=parser,
+        path=proto_path,
+    )
+    return analysis_repertoire, proto_repertoire
 
-    ## count and save dists
-    logging.info('Stage: Distance scores calculation')
-    pipeline.tcremp_dists_count(args.chain, nproc=args.nproc)
-    pipeline.tcremp_dists(args.chain)
-    pipeline.annot[args.chain][output_columns].merge(pipeline.annot_dists[args.chain]).to_csv(
-        f'{output_path}tcremp_dists_{args.chain}.txt', sep='\t', index=False)
-    # dist_df = tcremp.annot[args.chain][output_columns].merge(tcremp.annot_dists[args.chain])
-    # dist_df.to_csv(f'{output_path}tcremp_dists_{args.chain}.txt', sep='\t', index=False)
 
-    ## pca
-    logging.info('Stage: PCA calculation')
-    pipeline.tcremp_pca(args.chain)
-    pipeline.annot[args.chain][output_columns].merge(pipeline.pca[args.chain]).to_csv(
-        f'{output_path}tcremp_pca_{args.chain}.txt', sep='\t', index=False)
+def validate_sampling_size(rep: Repertoire, n, repertoire_name):
+    if n is None:
+        return False
+    if rep.total < n:
+        logging.warning(f'There are less than {n} clonotypes in {repertoire_name} repertoire. Would not perform sampling.')
+        return False
+    return True
 
-    ## tsne
-    logging.info('Stage: TSNE calculation')
-    pipeline.tcremp_tsne(args.chain)
-    pipeline.annot[args.chain][output_columns].merge(pipeline.tsne[args.chain]).to_csv(
-        f'{output_path}tcremp_tsne_{args.chain}.txt', sep='\t', index=False)
 
-    if args.cluster_algo != 'none':
-        logging.info(f'Clustering with algorithm {args.cluster_algo}')
-        logging.info(f'Stage: Clustering with algorithm {args.cluster_algo}')
-        run_clustering(args, pipeline, output_path, output_columns)
-    else:
-        logging.info('Finished without clustering')
+def main():
+    args = get_arguments()
+    input_path, output_path, output_prefix, proto_path = configure_io(args)
+    configure_logging(input_path, output_path, output_prefix)
 
-    logging.info(f'Results are in {output_path}')
+    chain = args.chain.split('_')
+    locus = {'TRA': 'alpha', 'TRB': 'beta', 'TRA_TRB': None}[args.chain]
+    segment_library = SegmentLibrary.load_default(genes=chain,
+                                                  organisms=args.species)
+
+    analysis_repertoire, proto_repertoire = load_mirpy_objects(segment_library=segment_library,
+                                                               data_path=input_path,
+                                                               proto_path=proto_path,
+                                                               locus=locus,
+                                                               mapping_column=args.index_col,
+                                                               llen=args.lower_len_cdr3,
+                                                               hlen=args.higher_len_cdr3)
+
+    if validate_sampling_size(analysis_repertoire, args.n_clonotypes, 'analysis'):
+        analysis_repertoire = analysis_repertoire.sample_n(n=args.n_clonotypes,
+                                                           sample_random=args.sample_random_prototypes,
+                                                           random_seed=args.random_seed)
+    if validate_sampling_size(proto_repertoire, args.n_prototypes, 'prototypes'):
+        proto_repertoire = proto_repertoire.sample_n(n=args.n_prototypes,
+                                                     sample_random=args.sample_random_clonotypes,
+                                                     random_seed=args.random_seed)
+
+    logging.info('Processed input clonotype and prototype data.')
+    logging.info(f'There are {analysis_repertoire.total} analysis clonotypes and {proto_repertoire.total} prototypes.')
+    logging.info('Initializing aligner.')
+    t0 = time.time()
+    aligner = ClonotypeAligner.from_library(lib=segment_library)
+    logging.info(f'Initialized aligner object in {time.time() - t0}.')
+
+    embedding_maker = PrototypeEmbedding(proto_repertoire,
+                                         aligner=aligner
+                                         )
+    logging.info(f'Running the embedding calculation.')
+
+    t0 = time.time()
+    embeddings = embedding_maker.embed_repertoire(analysis_repertoire,
+                                                  threads=args.nproc,
+                                                  flatten_scores=True)
+    column_names = []
+    for i in range(proto_repertoire.total):
+        if 'TRA' in chain:
+            column_names += [f'{i}_a_v', f'{i}_a_j', f'{i}_a_cdr3']
+        if 'TRB' in chain:
+            column_names += [f'{i}_b_v', f'{i}_b_j', f'{i}_b_cdr3']
+    embeddings = pd.DataFrame(embeddings, columns=column_names)
+
+    logging.info(f'Finished {analysis_repertoire.total} clones in {time.time() - t0}')
+    embeddings['clone_id'] = [x.id for x in analysis_repertoire]
+    embeddings = embeddings[['clone_id'] + column_names]
+    embeddings.to_csv(f'{output_path}/{output_prefix}_tcremp.tsv', sep='\t', index=False)
 
 
 if __name__ == '__main__':
