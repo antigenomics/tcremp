@@ -16,16 +16,6 @@ from mir.embedding.prototype_embedding import PrototypeEmbedding
 from mir.distances.aligner import ClonotypeAligner
 
 
-def validate_input_args(args):
-    chain_options = ['TRA', 'TRB', 'TRA_TRB']
-    if args.chain not in chain_options:
-        raise KeyError(f'Chain must be one of: {chain_options}')
-
-    species_options = ['HomoSapiens', 'MusMusculus', 'MaccaMulatta']
-    if args.species not in species_options:
-        raise KeyError(f'Species must be one of: {species_options}')
-
-
 def configure_logging(input_path, output_path, output_prefix):
     formatter_str = '[%(asctime)s\t%(name)s\t%(levelname)s] %(message)s'
     formatter = logging.Formatter(formatter_str)
@@ -95,13 +85,20 @@ def load_mirpy_objects(segment_library, data_path, proto_path, locus=None,
     return analysis_repertoire, proto_repertoire
 
 
+def validate_sampling_size(rep: Repertoire, n, repertoire_name):
+    if n is None:
+        return False
+    if rep.total < n:
+        logging.warning(f'There are less than {n} clonotypes in {repertoire_name} repertoire. Would not perform sampling.')
+        return False
+    return True
+
+
 def main(args):
-    validate_input_args(args)
     input_path, output_path, output_prefix, proto_path = configure_io(args)
     configure_logging(input_path, output_path, output_prefix)
 
     chain = args.chain.split('_')
-    single_chain = len(chain) == 1
     locus = {'TRA': 'alpha', 'TRB': 'beta', 'TRA_TRB': None}[args.chain]
     segment_library = SegmentLibrary.load_default(genes=chain,
                                                   organisms=args.species)
@@ -114,19 +111,21 @@ def main(args):
                                                                llen=args.lower_len_cdr3,
                                                                hlen=args.higher_len_cdr3)
 
-    analysis_repertoire = analysis_repertoire.sample_n(n=args.n_clonotypes,
-                                                       sample_random=args.sample_random_prototypes,
-                                                       random_seed=args.random_seed)
-    proto_repertoire = proto_repertoire.sample_n(n=args.n_prototypes,
-                                                 sample_random=args.sample_random_clonotypes,
-                                                 random_seed=args.random_seed)
+    if validate_sampling_size(analysis_repertoire, args.n_clonotypes, 'analysis'):
+        analysis_repertoire = analysis_repertoire.sample_n(n=args.n_clonotypes,
+                                                           sample_random=args.sample_random_prototypes,
+                                                           random_seed=args.random_seed)
+    if validate_sampling_size(proto_repertoire, args.n_prototypes, 'prototypes'):
+        proto_repertoire = proto_repertoire.sample_n(n=args.n_prototypes,
+                                                     sample_random=args.sample_random_clonotypes,
+                                                     random_seed=args.random_seed)
 
-    logging.info('Processed input clonotype and prototype data. ')
+    logging.info('Processed input clonotype and prototype data.')
     logging.info(f'There are {analysis_repertoire.total} analysis clonotypes and {proto_repertoire.total} prototypes.')
     logging.info('Initializing aligner.')
     t0 = time.time()
     aligner = ClonotypeAligner.from_library(lib=segment_library)
-    logging.info(f'Initialized aligner object in {time.time() - t0}. Initializing embedding object.')
+    logging.info(f'Initialized aligner object in {time.time() - t0}.')
 
     embedding_maker = PrototypeEmbedding(proto_repertoire,
                                          aligner=aligner

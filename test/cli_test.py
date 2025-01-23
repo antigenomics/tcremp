@@ -2,14 +2,14 @@ import subprocess
 import pandas as pd
 import unittest
 
-CLI_APP_PATH = "../tcremp/tcremp_run.py"
+CLI_APP_PATH = "../tcremp/new_tcremp_run.py"
 
 
 class TestCLI(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         """Читаем параметры из файла перед запуском тестов."""
-        df = pd.read_csv("flags.csv", delimiter=',')
+        df = pd.read_csv("flags.csv", delimiter='\t')
         for col in df.select_dtypes(include=['number']).columns:
             df[col] = df[col].astype('Int64')
         cls.test_cases = [
