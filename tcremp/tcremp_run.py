@@ -7,7 +7,7 @@ from pathlib import Path
 from mir.common.segments import SegmentLibrary
 from mir.common.repertoire import Repertoire
 from mir.common.parser import AIRRParser, DoubleChainAIRRParser
-from mir.embedding.prototype_embedding import PrototypeEmbedding
+from mir.embedding.prototype_embedding import PrototypeEmbedding, Metrics
 from mir.distances.aligner import ClonotypeAligner
 
 from tcremp import get_resource_path
@@ -127,7 +127,8 @@ def main():
     logging.info(f'Initialized aligner object in {time.time() - t0}.')
 
     embedding_maker = PrototypeEmbedding(proto_repertoire,
-                                         aligner=aligner
+                                         aligner=aligner,
+                                         metrics=Metrics(args.metrics),
                                          )
     logging.info(f'Running the embedding calculation.')
 

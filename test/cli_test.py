@@ -2,7 +2,7 @@ import subprocess
 import pandas as pd
 import unittest
 
-CLI_APP_PATH = "../tcremp/new_tcremp_run.py"
+CLI_APP_PATH = "../tcremp/tcremp_run.py"
 
 
 class TestCLI(unittest.TestCase):

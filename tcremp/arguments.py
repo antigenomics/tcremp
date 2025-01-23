@@ -44,8 +44,8 @@ def get_arguments():
                         choices=['HomoSapiens', 'MusMusculus', 'MacacaMulatta'],
                         help='V/J gene aligner species specification. Defaults to HomoSapiens.')
 
-    # parser.add_argument('-u', '--unique-clonotypes',
-    #                     help='Speed-up the analysis by running for unique clonotypes (clones) in the input table')  # +
+    parser.add_argument('-u', '--unique-clonotypes',
+                        help='Speed-up the analysis by running for unique clonotypes (clones) in the input table')  # +
 
     parser.add_argument('-r', '--random-seed', type=int, default=42,
                         help='Random seed for prototype sampling and other rng-based procedures. Defaults to 42.')
@@ -58,4 +58,8 @@ def get_arguments():
 
     parser.add_argument('-hlen', '--higher-len-cdr3', type=int, default=30,
                         help='Filter out cdr3 with len >=hlen. Defaults to 30.')
+
+    parser.add_argument('-m', '--metrics', type=str, default='similarity',
+                        choices=['similarity', 'dissimilarity'],
+                        help='Whether to calculate similarity or dissimilarity scores with TCRemP.')
     return parser.parse_args()

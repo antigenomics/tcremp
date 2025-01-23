@@ -178,6 +178,7 @@ The parameters for running ``tcremp-run`` main script are the following:
 | --nproc                    | -np              | number of processes to perform calculcation with                               | integer                                 | no       | 1                          |
 | --lower-len-cdr3           | -llen            | filter out cdr3 with len <llen                                                 | integer                                 | no       | 30                         |
 | --higher-len-cdr3          | -hlen            | filter out cdr3 with len >hlen                                                 | integer                                 | no       | 30                         |
+| --metrics                  | -m               | which type of matrics to use: similarity or dissimilarity one                  | similarity, dissimilarity               | no       | similarity                 |
 
 ### Output
 
