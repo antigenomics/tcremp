@@ -9,6 +9,7 @@ output:
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
+Sys.setenv("VROOM_CONNECTION_SIZE" = 2^24)
 library(reshape2)
 library(tidyverse)
 library(ggplot2)
@@ -62,7 +63,7 @@ glimpse(vpdb)
 
 Download PDB structures
 
-```{r message=FALSE, warnings=FALSE, R.options=list(max.print=30)}
+```{r warning=FALSE, results='hide',message=FALSE}
 pdb_ids <- unique(vpdb$clone_id)
 pdb_files <- get.pdb(pdb_ids, path = "tmp/")
 pdb_files <- pdb_files[endsWith(pdb_files, ".pdb")]
@@ -70,7 +71,7 @@ pdb_files <- pdb_files[endsWith(pdb_files, ".pdb")]
 
 Align, superimpose and get coords. Then compute RMSD
 
-```{r message=FALSE, warnings=FALSE, R.options=list(max.print=30)}
+```{r warning=FALSE, results='hide',message=FALSE}
 struct_alns <- pdbaln(pdb_files, fit = F, 
                       ncore = 12, 
                       exefile = "msa",
@@ -117,7 +118,7 @@ struct_alns_rmsd.mhc <-
           select(-mhc.tmp)) |>
   unique()
 
-ggplot(struct_alns_rmsd.mhc,
+plt1 <- ggplot(struct_alns_rmsd.mhc,
        aes(x = rmsd)) +
   geom_density(data = struct_alns_rmsd.mhc |>
                  select(rmsd),
@@ -128,9 +129,13 @@ ggplot(struct_alns_rmsd.mhc,
   ylab("Fraction of structure pairs") +
   theme_minimal() +
   theme(aspect.ratio = 1)
+plt1
+pdf("figs_struct_1A.pdf")
+plt1
+dev.off()
 ```
 
-Distances from TCREMP
+Distances from TCREMP where prototypes are TCRpMHC structures themselves
 
 ```{r}
 tcremp_dists <- read_tsv("v_tcrpmhc_tcremp.tsv")
@@ -157,9 +162,11 @@ struct_alns_rmsd.mhc.dist <- struct_alns_rmsd.mhc |>
   left_join(fetch_dist("b_j"))
 ```
 
+Plot them
+
 ```{r}
 roundfactor <- 5.0
-struct_alns_rmsd.mhc.dist |>
+plt2 <- struct_alns_rmsd.mhc.dist |>
   melt(id.vars = 1:5,
        variable.name = "region",
        value.name = "distance") |>
@@ -179,8 +186,59 @@ struct_alns_rmsd.mhc.dist |>
   facet_wrap(. ~ region, scales = "free") +
   scale_fill_brewer(guide = F, palette = "Set1") +
   theme_minimal() +
+  ggtitle("TCRpMHCs records themselves as prototypes") +
   theme(aspect.ratio = 1,
         axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+plt2
+pdf("figs_struct_1B.pdf")
+plt2
+dev.off()
+```
+
+Distances from TCREMP where prototypes are sampled from OLGA
+
+```{r}
+tcremp_dists <- read_tsv("v_tcrpmhc_against_olga_tcremp.tsv.gz")
+
+struct_alns_rmsd.mhc.dist2 <- struct_alns_rmsd.mhc |>
+  left_join(fetch_dist("a_v")) |>
+  left_join(fetch_dist("a_cdr3")) |>
+  left_join(fetch_dist("a_j")) |>
+  left_join(fetch_dist("b_v")) |>
+  left_join(fetch_dist("b_cdr3")) |>
+  left_join(fetch_dist("b_j"))
+```
+
+Plot them
+
+```{r}
+plt3 <- struct_alns_rmsd.mhc.dist2 |>
+  melt(id.vars = 1:5,
+       variable.name = "region",
+       value.name = "distance") |>
+  filter(clone_id.from > clone_id.to) |>
+  mutate(chain = substr(region, 8, 8),
+         rmsdr = round(rmsd * roundfactor, 0) / roundfactor) |>
+  mutate(rmsdr = ifelse(rmsdr > 3, "4+", signif(rmsdr, 1)) |>
+           as.factor()) |>
+  ggplot(aes(x = rmsdr, 
+             group = rmsdr, 
+             y = distance,
+             fill = chain)) +
+  geom_boxplot(alpha = 0.7, size = 0.3, outlier.size = 1.0, 
+               outlier.shape = "-") +
+  xlab("RMSD, Å") + 
+  ylab("TCREMP distance") +
+  facet_wrap(. ~ region, scales = "free") +
+  scale_fill_brewer(guide = F, palette = "Set1") +
+  ggtitle("3000 random TRA-TRB pairs sampled using OLGA as prototypes") +
+  theme_minimal() +
+  theme(aspect.ratio = 1,
+        axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+plt3
+pdf("figs_struct_1C.pdf")
+plt3
+dev.off()
 ```
 
 ```{r}
