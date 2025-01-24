@@ -2,3 +2,4 @@ tmp/
 aln.fa
 *.Rproj
 .Rhistory
+.RData
