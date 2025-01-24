@@ -59,7 +59,7 @@ def get_arguments():
     parser.add_argument('-hlen', '--higher-len-cdr3', type=int, default=30,
                         help='Filter out cdr3 with len >=hlen. Defaults to 30.')
 
-    parser.add_argument('-m', '--metrics', type=str, default='similarity',
+    parser.add_argument('-m', '--metrics', type=str, default='dissimilarity',
                         choices=['similarity', 'dissimilarity'],
                         help='Whether to calculate similarity or dissimilarity scores with TCRemP.')
     return parser.parse_args()
