@@ -20,6 +20,10 @@ library(ggplot2)
 library(ggrastr) #install.packages("Cairo")
 library(brms)
 library(umap)
+library(fitdistrplus)
+# install.packages("devtools")
+#devtools::install_github("thomasp85/patchwork")
+library(patchwork)
 ```
 
 ## Properties of TCREMP distances
@@ -96,10 +100,19 @@ number of matches between two random strings of amino acids can be modeled as a 
 data.1diag <- data.1 |>
   filter(as.integer(from) < as.integer(to))
 
+n <- length(data.1diag$Dij)
+nn <- n
 mu <- mean(data.1diag$Dij)
 sigma <- sd(data.1diag$Dij)
 alpha <- mu * mu / sigma / sigma
 lambda <- alpha / mu
+
+ks.test(data.1diag$Dij, 
+        "pnorm", mean = mu, sd = sigma)
+fitdist(data.1diag$Dij, "norm")$aic
+ks.test(data.1diag$Dij, 
+        "pgamma", shape = alpha, rate = lambda)
+fitdist(data.1diag$Dij, "gamma")$aic
 
 fig1 <- data.1diag |>
   ggplot(aes(x = Dij)) +
@@ -119,9 +132,6 @@ fig1 <- data.1diag |>
   theme(axis.text.y = element_blank(), 
         axis.ticks.y = element_blank())
 fig1
-pdf("figs_aux_1A.pdf")
-fig1
-dev.off()
 ```
 
 We can fit distribution of Euclidean distances $D_{ij}$ using a generalized 
@@ -147,12 +157,19 @@ print(fvars)
 plot(ffit)
 ```
 
-Plot results
+Plot fit results
 
 ```{r fig.width=4, fig.height=3}
+n <- length(data.1diag$Dij)
 fmu <- fvars$fixed$Estimate
 fsigma <- fvars$spec_pars$Estimate[1]
 fxi <- fvars$spec_pars$Estimate[2]
+
+ks.test(scale(data.1diag$DDij), 
+        "pnorm", mean = 0, sd = 1)
+fitdist(as.numeric(scale(data.1diag$DDij)), "norm")$aic
+ks.test(scale(data.1diag$DDij), 
+        "pgen_extreme_value", mu = fmu, sigma = fsigma, xi = fxi)
 
 fig2 <- data.1diag |>
   ggplot(aes(x = DDij)) + 
@@ -162,9 +179,17 @@ fig2 <- data.1diag |>
                  fill = "#b2abd2",
                  alpha = 0.7) +
   geom_line(data = tibble(x = (-60:120 / 20) * DDij.sd + DDij.mean,
+                          y = dnorm(-60:120 / 20, 
+                                       mean = 0, 
+                                       sd = 1
+                                     ) / DDij.sd
+                          ),
+                          aes(x, y), 
+                color = "grey25") +
+  geom_line(data = tibble(x = (-60:120 / 20) * DDij.sd + DDij.mean,
                           y = dgen_extreme_value(-60:120 / 20, 
                                        mu = fmu, 
-                                       sigma = fsigma * 0.9,
+                                       sigma = fsigma,
                                        xi = fxi
                                      ) / DDij.sd
                           ),
@@ -176,8 +201,17 @@ fig2 <- data.1diag |>
   theme(axis.text.y = element_blank(), 
         axis.ticks.y = element_blank())
 fig2
-pdf("figs_aux_1B.pdf")
-fig2
+```
+
+Save fig
+
+```{r}
+pdf("figs_1.pdf", width = 7, height = 4)
+fig1 + 
+  theme(plot.tag = element_text(size = 16, face="bold")) +
+  fig2 +
+  theme(plot.tag = element_text(size = 16, face="bold")) +
+  plot_annotation(tag_levels = 'a')
 dev.off()
 ```
 
@@ -224,9 +258,6 @@ with(data.1tri,
      cor.test(Dab + Dbc, Dac))
 
 fig3
-pdf("figs_aux_2A.pdf")
-fig3
-dev.off()
 
 fig4 <- data.1tri |>
   sample_n(100000) |>
@@ -243,11 +274,7 @@ fig4 <- data.1tri |>
 
 with(data.1tri,
      cor.test(sqrt(DDab * DDbc), DDac))
-
 fig4
-pdf("figs_aux_2B.pdf")
-fig4
-dev.off()
 ```
 
 $\textbf{Q2}: d_{i,j} \sim d_{i,\cdot} + d_{\cdot,j}, \log D_{i,j} \sim \log D_{i,\cdot} + \log D_{\cdot,j}\,\,\square$
@@ -270,9 +297,6 @@ with(data.1diag,
 with(data.1diag,
      cor.test(Sij, DDij))
 fig5
-pdf("figs_aux_2C.pdf")
-fig5
-dev.off()
 
 fig6 <- data.1diag |>
   ggplot(aes(x = Dij, y = DDij)) +
@@ -286,8 +310,21 @@ fig6 <- data.1diag |>
 with(data.1diag,
      cor.test(Dij, DDij))
 fig6
-pdf("figs_aux_2D.pdf")
-fig6
+```
+
+Save fig
+
+```{r}
+pdf("figs_2.pdf", width = 7, height = 8)
+fig5 + 
+  theme(plot.tag = element_text(size = 16, face="bold")) +
+  fig6 +
+  theme(plot.tag = element_text(size = 16, face="bold")) +
+  fig3 + 
+  theme(plot.tag = element_text(size = 16, face="bold")) +
+  fig4 +
+  theme(plot.tag = element_text(size = 16, face="bold")) +
+  plot_annotation(tag_levels = 'a')
 dev.off()
 ```
 
@@ -335,7 +372,12 @@ fig7 <- v_bp3000_d |>
 with(v_bp3000_d,
      cor.test(Dp, Db))
 fig7
-pdf("figs_aux_3.pdf")
+```
+
+Save fig
+
+```{r}
+pdf("figs_3.pdf", width = 4, height = 4)
 fig7
 dev.off()
 ```
@@ -396,7 +438,12 @@ fig8 <- v_px_umap |>
   theme(aspect.ratio = 1,
         legend.position = "bottom")
 fig8
-pdf("figs_aux_4.pdf")
+```
+
+Save fig
+
+```{r}
+pdf("figs_4.pdf", width = 7, height = 8)
 fig8
 dev.off()
 ```

@@ -19,6 +19,8 @@ library(ggplot2)
 #install.packages("devtools")
 #devtools::install_bitbucket("Grantlab/bio3d", subdir = "ver_devel/bio3d/")
 library(bio3d)
+library(patchwork)
+select = dplyr::select
 ```
 
 Fetch list of TCRs and their structures from VDJdb
@@ -32,6 +34,7 @@ vpdb <- read_tsv("v_tcrpmhc_raw.txt") |>
   mutate(meta.structure.id = ifelse(meta.structure.id == '4E+41',
                                     "4e41",
                                     meta.structure.id))
+vpdb$`...1` <- NULL
 
 vpdb_meta <- vpdb |>
   select(mhc.class, clone_id = meta.structure.id) |>
@@ -118,21 +121,19 @@ struct_alns_rmsd.mhc <-
           select(-mhc.tmp)) |>
   unique()
 
-plt1 <- ggplot(struct_alns_rmsd.mhc,
+plt1 <- ggplot(struct_alns_rmsd.mhc |>
+                 mutate(mhc.fromto = paste(mhc.from, "vs", mhc.to)) |>
+                 filter(mhc.fromto != "MHCII vs MHCI"),
        aes(x = rmsd)) +
   geom_density(data = struct_alns_rmsd.mhc |>
                  select(rmsd),
                color = NA, fill = "#74add1") +
   geom_density(color = "black", fill = NA, size = 0.25) +
-  facet_grid(mhc.from ~ mhc.to) +
+  facet_wrap( ~ mhc.fromto) +
   xlab("RMSD, Å") + 
-  ylab("Fraction of structure pairs") +
-  theme_minimal() +
-  theme(aspect.ratio = 1)
+  ylab("Fraction of aligned\nTCRpMHC structure pairs") +
+  theme_minimal()
 plt1
-pdf("figs_struct_1A.pdf")
-plt1
-dev.off()
 ```
 
 Distances from TCREMP where prototypes are TCRpMHC structures themselves
@@ -187,12 +188,8 @@ plt2 <- struct_alns_rmsd.mhc.dist |>
   scale_fill_brewer(guide = F, palette = "Set1") +
   theme_minimal() +
   ggtitle("TCRpMHCs records themselves as prototypes") +
-  theme(aspect.ratio = 1,
-        axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
 plt2
-pdf("figs_struct_1B.pdf")
-plt2
-dev.off()
 ```
 
 Distances from TCREMP where prototypes are sampled from OLGA
@@ -233,11 +230,20 @@ plt3 <- struct_alns_rmsd.mhc.dist2 |>
   scale_fill_brewer(guide = F, palette = "Set1") +
   ggtitle("3000 random TRA-TRB pairs sampled using OLGA as prototypes") +
   theme_minimal() +
-  theme(aspect.ratio = 1,
-        axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
 plt3
-pdf("figs_struct_1C.pdf")
-plt3
+```
+
+```{r}
+pdf("figs_5.pdf", width=7, height=11)
+(plt1 +
+   scale_x_continuous("", limits = c(0, 4)) +
+   theme(plot.tag = element_text(size = 16, face="bold"))) / 
+  (plt2 + 
+     xlab("") +
+     theme(plot.tag = element_text(size = 16, face="bold"))) / 
+  (plt3 + theme(plot.tag = element_text(size = 16, face="bold"))) +
+  plot_annotation(tag_levels = 'a')
 dev.off()
 ```
 
