@@ -1,5 +1,7 @@
 import os
 
+from tcremp.arguments import *
+
 
 def get_resource_path(name=None):
     path = os.path.realpath(__file__)

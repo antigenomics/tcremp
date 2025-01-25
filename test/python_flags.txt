@@ -1,0 +1,27 @@
+#############################################################
+# Paste test factors here.
+# Check the documents for more details.
+# https://github.com/Microsoft/pict/blob/master/doc/pict.md
+#############################################################
+
+
+input: valid
+output: tmp
+index_col: None, clone_id
+chain: TRA, TRB, TRA_TRB
+prototypes_path: test_data/tcremp_prototypes_olga_test.tsv
+n_prototypes: None, 10, 100, 1000
+n_clonotypes: None, 10, 100, 1000
+sample_random_prototypes: True, False
+sample_random_clonotypes: True, False
+random_seed: None, 10
+species: HomoSapiens
+unique_clonotypes: True, False
+lower_len_cdr3: 5, 11
+higher_len_cdr3: 10, 20
+
+
+if [chain] = "TRA_TRB" then [index_column] = "clone_id";
+
+[lower_len_cdr3] <= [higher_len_cdr3];
+

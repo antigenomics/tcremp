@@ -7,6 +7,7 @@ name = "tcremp"
 version = "0.0.1"
 authors = [
   { name="yuliajk", email="yulia.mow@gmail.com" },
+  { name="vek239", email="elizaveta.k.vlasova@gmail.com" },
   { name="mikessh", email="mikhail.shugay@gmail.com" },
 ]
 description = "A library prototype-based T-cell receptor (TCR) sequence embedding"
@@ -20,7 +21,7 @@ classifiers = [
 keywords = [ "antigen", "antibody", "t-cell", "receptor", "sequence", "embedding"]
 requires-python = ">=3.11"
 dependencies = [
-        "mir@git+https://github.com/antigenomics/mirpy.git@0.0.4-mirpy-january",
+        "mir@git+https://github.com/antigenomics/mirpy.git@0.0.5-tcremp-integration",
         "biopython==1.81",
         "matplotlib==3.7.2",
         "numpy>=1.25.1; python_version < '3.12'",
