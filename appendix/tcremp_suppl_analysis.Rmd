@@ -10,13 +10,20 @@ date: "2025-01-09"
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
+Sys.setenv(VROOM_CONNECTION_SIZE = 2^25)
+set.seed(42)
 library(tidyverse)
 library(reshape2)
 library(stringr)
 library(latex2exp)
 library(ggplot2)
 library(ggrastr) #install.packages("Cairo")
+library(brms)
 library(umap)
+library(fitdistrplus)
+# install.packages("devtools")
+#devtools::install_github("thomasp85/patchwork")
+library(patchwork)
 ```
 
 ## Properties of TCREMP distances
@@ -86,18 +93,28 @@ This is in line with [Pang, H., Tang, J., Chen, SS. et al. Statistical distribut
 We will just note that if, for first half of CDR3$\beta$ sequence $d_{ij}^{l} \sim \Gamma(\cdot)$ then 
 $d_{ij} = d_{ij}^{l} + d_{ij}^r \sim \Gamma(\cdot)$ due to the nature of Gamma distribution. Also note that
 number of matches between two random strings of amino acids can be modeled as a Poisson process which leads to Gamma distribution.
+
 > N.B. We use Gamma distribution instead of Erlang distribution as sequence alignment scores may be non-integer
 
 ```{r fig.width=4, fig.height=3}
 data.1diag <- data.1 |>
   filter(as.integer(from) < as.integer(to))
 
+n <- length(data.1diag$Dij)
+nn <- n
 mu <- mean(data.1diag$Dij)
 sigma <- sd(data.1diag$Dij)
 alpha <- mu * mu / sigma / sigma
 lambda <- alpha / mu
 
-data.1diag |>
+ks.test(data.1diag$Dij, 
+        "pnorm", mean = mu, sd = sigma)
+fitdist(data.1diag$Dij, "norm")$aic
+ks.test(data.1diag$Dij, 
+        "pgamma", shape = alpha, rate = lambda)
+fitdist(data.1diag$Dij, "gamma")$aic
+
+fig1 <- data.1diag |>
   ggplot(aes(x = Dij)) +
   geom_histogram(aes(y = after_stat(density)), 
                  binwidth = 50, 
@@ -114,47 +131,94 @@ data.1diag |>
   theme_classic() + 
   theme(axis.text.y = element_blank(), 
         axis.ticks.y = element_blank())
+fig1
 ```
 
-The distribution of Euclidean distances $D_{ij}$ looks similar to Planck radiation law distribution for wavelengths: 
-$D_{ij} \sim P(A, B)$, $P(x | A, B) = \frac{A}{x^\nu}\frac{1}{e^{B/x}-1}$. 
-Assume that the support is $x \in [1, \infty)$ so we don't have to deal with the infinity at $x = 0$, we can shift the distances accordingly.
-Using method of moments for parameter estimation would require calculating integrals like $I_{\nu} = \int_1^\infty \frac{A/x^\nu dx}{e^{B/x}-1}$ 
-which can lead to expressions such as $I_1 = \frac{A}{B}\left(\text{Li}_2(e^{-B}) + B \ln(1 - e ^{-B})\right)$ and $I_2 = -A \ln(1 - e ^{-B})$
-that are quite complex, so we would rather choose parameters $A$ and $B$ by hand for $\nu = 5$.
+We can fit distribution of Euclidean distances $D_{ij}$ using a generalized 
+extreme value (GEV) distribution $P_{GEV}(\mu, \sigma, \xi)$. It is said, that
+GEV distribution is often used as an approximation to model the maxima of long 
+(finite) sequences of random variables. Namely, we aim to  fit the Fréchet 
+distribution aka type II GEV. We will first scale 
+$D_{ij} \rightarrow \frac{D_{ij} - \text{E}[D_{ij}]}{\text{SD}[D_{ij}]}$ 
+to simplify computations.
+
+```{r}
+DDij.mean <- mean(data.1diag$DDij)
+DDij.sd <- sd(data.1diag$DDij)
+ffit <- brm(formula = y ~ 1, 
+            data = data.1diag |> 
+              mutate(y = (DDij - DDij.mean) / DDij.sd), 
+            family = "gen_extreme_value",
+            cores = 10,
+            seed = 42,
+            iter = 500)
+fvars <- summary(ffit)
+print(fvars)
+plot(ffit)
+```
+
+Plot fit results
 
 ```{r fig.width=4, fig.height=3}
-# choose coef by hand
-hh <- 6.62607015e-34
-cc <- 299792458
-TT <- 11000
-kB <- 1.380649e-23
-A <- 2.0 * hh * cc * cc
-B <- hh * cc / kB / TT
-scale <- 0.0000033 / 8E+11
+n <- length(data.1diag$Dij)
+fmu <- fvars$fixed$Estimate
+fsigma <- fvars$spec_pars$Estimate[1]
+fxi <- fvars$spec_pars$Estimate[2]
 
-data.1diag |>
-  ggplot(aes(x = DDij / 10 - 370)) + # choose coef by hand
+ks.test(scale(data.1diag$DDij), 
+        "pnorm", mean = 0, sd = 1)
+fitdist(as.numeric(scale(data.1diag$DDij)), "norm")$aic
+ks.test(scale(data.1diag$DDij), 
+        "pgen_extreme_value", mu = fmu, sigma = fsigma, xi = fxi)
+
+fig2 <- data.1diag |>
+  ggplot(aes(x = DDij)) + 
   geom_histogram(aes(y = after_stat(density)), 
-                 binwidth = 50, 
+                 binwidth = 500, 
                  color = "grey",
                  fill = "#b2abd2",
                  alpha = 0.7) +
-  geom_line(data = tibble(x = 1:2500,
-                          y = scale * (A / (x * 1e-9) ^ 5.0) / 
-                            (exp(B / (x * 1e-9)) - 1)), # choose coef by hand
+  geom_line(data = tibble(x = (-60:120 / 20) * DDij.sd + DDij.mean,
+                          y = dnorm(-60:120 / 20, 
+                                       mean = 0, 
+                                       sd = 1
+                                     ) / DDij.sd
+                          ),
+                          aes(x, y), 
+                color = "grey25") +
+  geom_line(data = tibble(x = (-60:120 / 20) * DDij.sd + DDij.mean,
+                          y = dgen_extreme_value(-60:120 / 20, 
+                                       mu = fmu, 
+                                       sigma = fsigma,
+                                       xi = fxi
+                                     ) / DDij.sd
+                          ),
                           aes(x, y), 
                 color = "#e66101") +
-  scale_x_continuous(TeX("$D_{ij} / 10 - 370$"), 
-                     limits = c(0, 2000)) + ylab(TeX("$P(D)$")) + 
+  scale_x_continuous(TeX("$D_{ij}$")) +
+  ylab(TeX("$P(D)$")) + 
   theme_classic() + 
   theme(axis.text.y = element_blank(), 
         axis.ticks.y = element_blank())
+fig2
 ```
 
-$\textbf{Q1}: d_{ij} \sim \Gamma, D_{ij} \sim \text{Plank}\,\,\square$
+Save fig
 
-Check additivity and triangle rule, circle through triplicates
+```{r}
+pdf("figs_1.pdf", width = 7, height = 4)
+fig1 + 
+  theme(plot.tag = element_text(size = 16, face="bold")) +
+  fig2 +
+  theme(plot.tag = element_text(size = 16, face="bold")) +
+  plot_annotation(tag_levels = 'a')
+dev.off()
+```
+
+
+$\textbf{Q1}: d_{ij} \sim \Gamma, D_{ij} \sim \text{GEV}\,\,\square$
+
+Check approx. additivity and triangle rule, circle through triplicates
 
 ```{r}
 data.1tri <- expand_grid(a = 0:999, b = 0:999, c = 0:999) |>
@@ -176,8 +240,7 @@ data.1tri <- expand_grid(a = 0:999, b = 0:999, c = 0:999) |>
 Plot them
 
 ```{r fig.width=4, fig.height=4}
-set.seed(42)
-data.1tri |>
+fig3 <- data.1tri |>
   sample_n(100000) |>
   ggplot(aes(x = (Dab + Dbc) / 2, y = Dac)) +
   geom_hex(bins = 30) +
@@ -194,7 +257,9 @@ data.1tri |>
 with(data.1tri,
      cor.test(Dab + Dbc, Dac))
 
-data.1tri |>
+fig3
+
+fig4 <- data.1tri |>
   sample_n(100000) |>
   ggplot(aes(x = sqrt(DDab * DDbc), y = DDac)) +
   geom_hex(bins = 30) +
@@ -209,14 +274,31 @@ data.1tri |>
 
 with(data.1tri,
      cor.test(sqrt(DDab * DDbc), DDac))
+fig4
 ```
 
 $\textbf{Q2}: d_{i,j} \sim d_{i,\cdot} + d_{\cdot,j}, \log D_{i,j} \sim \log D_{i,\cdot} + \log D_{\cdot,j}\,\,\square$
 
-Compare alignment and embedding distances
+Compare alignment and embedding distances; also check that dissimilarity scores 
+have good negative correlation with similarity scores
 
 ```{r fig.width=4, fig.height=4}
-data.1diag |>
+fig5 <- data.1diag |>
+  ggplot(aes(x = Dij, y = Sij)) +
+  geom_hex(bins = 30) +
+  scale_fill_distiller(palette = "Purples", direction = 1, guide = F) + 
+  geom_smooth(fill = NA, color = "#e66101") +
+  scale_x_continuous(TeX("$d_{ij}$"), limits = c(0, 2000)) +
+  scale_y_continuous(TeX("$s_{ij}$"), limits = c(0, 400)) + 
+  theme_classic() +
+  theme(aspect.ratio = 1)
+with(data.1diag,
+     cor.test(Dij, Sij))
+with(data.1diag,
+     cor.test(Sij, DDij))
+fig5
+
+fig6 <- data.1diag |>
   ggplot(aes(x = Dij, y = DDij)) +
   geom_hex(bins = 30) +
   scale_fill_distiller(palette = "Purples", direction = 1, guide = F) + 
@@ -225,9 +307,25 @@ data.1diag |>
   scale_y_continuous(TeX("$D_{ij}$"), limits = c(1000, 20000)) + 
   theme_classic() +
   theme(aspect.ratio = 1)
-
 with(data.1diag,
      cor.test(Dij, DDij))
+fig6
+```
+
+Save fig
+
+```{r}
+pdf("figs_2.pdf", width = 7, height = 8)
+fig5 + 
+  theme(plot.tag = element_text(size = 16, face="bold")) +
+  fig6 +
+  theme(plot.tag = element_text(size = 16, face="bold")) +
+  fig3 + 
+  theme(plot.tag = element_text(size = 16, face="bold")) +
+  fig4 +
+  theme(plot.tag = element_text(size = 16, face="bold")) +
+  plot_annotation(tag_levels = 'a')
+dev.off()
 ```
 
 $\textbf{Q3}: D_{i,j} \sim d_{i,j} \,\,\square$
@@ -240,7 +338,6 @@ Note that here we use CDR3$\beta$ scores and omit V$\beta$, J$\beta$ as they are
 quite predictable/discrete and are subject to batch effect/bias.
 
 ```{r}
-Sys.setenv(VROOM_CONNECTION_SIZE = 2^25)
 read_proto <- function(prefix = "v_p", sz = 3000) {
   tmp <- read_tsv(paste0(prefix, sz, ".txt.gz")) |>
     select(cloneId, matches("b_\\d+_cdr3$")) |>
@@ -263,7 +360,7 @@ v_bp3000_d <- merge(v_p3000_d, v_b3000_d)
 Plot and correlate
 
 ```{r fig.width=4, fig.height=4}
-v_bp3000_d |>
+fig7 <- v_bp3000_d |>
   ggplot(aes(x = Dp, y = Db)) +
   geom_hex(bins = 30) +
   scale_fill_distiller(palette = "Purples", direction = 1, guide = F) + 
@@ -274,6 +371,15 @@ v_bp3000_d |>
   theme(aspect.ratio = 1)
 with(v_bp3000_d,
      cor.test(Dp, Db))
+fig7
+```
+
+Save fig
+
+```{r}
+pdf("figs_3.pdf", width = 4, height = 4)
+fig7
+dev.off()
 ```
 
 $\textbf{Q4}: D_{ij}^{Model} \sim D_{ij}^{RepSeq}\,\,\square$
@@ -298,8 +404,6 @@ v_px <- bind_rows(
 Do UMAP
 
 ```{r fig.width=6, fig.height=6}
-set.seed(42)
-
 do_umap <- function(data) {
   config <- umap.defaults
   config$n_neighbors <- config$n_neighbors * 3
@@ -317,7 +421,7 @@ v_px_umap <- v_px |>
   group_by(n_prot) |>
   group_modify(~ do_umap(.x))
 
-v_px_umap |>
+fig8 <- v_px_umap |>
   mutate(n_prot = paste0("p", n_prot)) |>
   group_by(n_prot) |>
   mutate(sgn_GIL_1 = sign(sum(UMAP1 * startsWith(ag, "GIL"))),
@@ -333,6 +437,15 @@ v_px_umap |>
   theme_minimal() +
   theme(aspect.ratio = 1,
         legend.position = "bottom")
+fig8
+```
+
+Save fig
+
+```{r}
+pdf("figs_4.pdf", width = 7, height = 8)
+fig8
+dev.off()
 ```
 
 $\textbf{Q5}: \text{UMAP stabilizes for}\,\,n_{proto} \geq 1000\,\,\square$

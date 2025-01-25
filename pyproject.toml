@@ -19,7 +19,7 @@ classifiers = [
     "Operating System :: OS Independent",
 ]
 keywords = [ "antigen", "antibody", "t-cell", "receptor", "sequence", "embedding"]
-requires-python = ">=3.11,<3.12"
+requires-python = ">=3.11"
 dependencies = [
         "mir@git+https://github.com/antigenomics/mirpy.git@0.0.5-tcremp-integration",
         "biopython==1.81",

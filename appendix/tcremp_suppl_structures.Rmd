@@ -1,0 +1,252 @@
+---
+title: "TCREMP and TCRpMHC structures"
+author: "M.S."
+date: "2025-01-18"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+Sys.setenv("VROOM_CONNECTION_SIZE" = 2^24)
+library(reshape2)
+library(tidyverse)
+library(ggplot2)
+# The optimal way to use bio3d is via MSA
+#install.packages("BiocManager")
+#BiocManager::install("msa")
+#install.packages("devtools")
+#devtools::install_bitbucket("Grantlab/bio3d", subdir = "ver_devel/bio3d/")
+library(bio3d)
+library(patchwork)
+select = dplyr::select
+```
+
+Fetch list of TCRs and their structures from VDJdb
+
+```{r}
+download.file('https://raw.githubusercontent.com/antigenomics/vdjdb-db/refs/heads/master/chunks/PDB_Database.txt',
+              destfile = "v_tcrpmhc_raw.txt",
+              method = "wget")
+
+vpdb <- read_tsv("v_tcrpmhc_raw.txt") |>
+  mutate(meta.structure.id = ifelse(meta.structure.id == '4E+41',
+                                    "4e41",
+                                    meta.structure.id))
+vpdb$`...1` <- NULL
+
+vpdb_meta <- vpdb |>
+  select(mhc.class, clone_id = meta.structure.id) |>
+  unique()
+
+glimpse(vpdb)
+```
+
+Format into AIRR
+
+```{r}
+vpdb <- vpdb |>
+  filter(species == "HomoSapiens") |>
+  pivot_longer(cols = c(v.alpha, j.alpha, cdr3.alpha,
+                        v.beta, j.beta, cdr3.beta)) |>
+  select(meta.structure.id, name, value) |>
+  separate(name, c("variable", "locus")) |>
+  unique() |>
+  pivot_wider(id_cols = c(meta.structure.id, locus), 
+              names_from = variable, 
+              values_from = value) |>
+  rename(clone_id = meta.structure.id, 
+         v_call = v, j_call = j, 
+         junction_aa = cdr3)
+
+write_tsv(vpdb, "v_tcrpmhc.txt")
+glimpse(vpdb)
+```
+
+Download PDB structures
+
+```{r warning=FALSE, results='hide',message=FALSE}
+pdb_ids <- unique(vpdb$clone_id)
+pdb_files <- get.pdb(pdb_ids, path = "tmp/")
+pdb_files <- pdb_files[endsWith(pdb_files, ".pdb")]
+```
+
+Align, superimpose and get coords. Then compute RMSD
+
+```{r warning=FALSE, results='hide',message=FALSE}
+struct_alns <- pdbaln(pdb_files, fit = F, 
+                      ncore = 12, 
+                      exefile = "msa",
+                      maxiters = 256)
+# how coords are organized:
+# (struct_alns$xyz |> matrix(nrow = 4))[1,] |> matrix(nrow = 3) |> t()
+struct_alns_ids <- tools::file_path_sans_ext(basename(struct_alns$id))
+struct_alns_coords <- struct_alns$xyz |> 
+  matrix(nrow = length(struct_alns$id)) |> 
+  t()
+aligned_residues <- apply(struct_alns_coords, 2, \(x) sum(!is.na(x)))
+struct_alns_coords[is.na(struct_alns_coords)] <- 0
+# pairwise distances
+struct_alns_eucl <- struct_alns_coords |>
+  t() |>
+  dist() |> 
+  as.matrix()
+# normalize for number of aligned residues
+struct_alns_rmsd <- t(struct_alns_eucl / sqrt(aligned_residues)) / sqrt(aligned_residues)
+rownames(struct_alns_rmsd) <- struct_alns_ids
+colnames(struct_alns_rmsd) <- struct_alns_ids
+struct_alns_rmsd <- struct_alns_rmsd |>
+  melt()
+colnames(struct_alns_rmsd) <- c("clone_id.from", "clone_id.to", "rmsd")
+summary(struct_alns_rmsd)
+```
+
+Plot RMSD, compare MHCI and MHCII - should be not much difference here 
+due to gaps
+
+```{r}
+struct_alns_rmsd.mhc <- struct_alns_rmsd |>
+  filter(clone_id.from != clone_id.to) |>
+  left_join(vpdb_meta |> 
+              rename(mhc.from = mhc.class, clone_id.from = clone_id)) |>
+  left_join(vpdb_meta |>
+              rename(mhc.to = mhc.class, clone_id.to = clone_id))
+struct_alns_rmsd.mhc <-
+  rbind(struct_alns_rmsd.mhc,
+        struct_alns_rmsd.mhc |>
+          mutate(mhc.tmp = mhc.from,
+                 mhc.from = mhc.to,
+                 mhc.to = mhc.tmp) |>
+          select(-mhc.tmp)) |>
+  unique()
+
+plt1 <- ggplot(struct_alns_rmsd.mhc |>
+                 mutate(mhc.fromto = paste(mhc.from, "vs", mhc.to)) |>
+                 filter(mhc.fromto != "MHCII vs MHCI"),
+       aes(x = rmsd)) +
+  geom_density(data = struct_alns_rmsd.mhc |>
+                 select(rmsd),
+               color = NA, fill = "#74add1") +
+  geom_density(color = "black", fill = NA, size = 0.25) +
+  facet_wrap( ~ mhc.fromto) +
+  xlab("RMSD, Å") + 
+  ylab("Fraction of aligned\nTCRpMHC structure pairs") +
+  theme_minimal()
+plt1
+```
+
+Distances from TCREMP where prototypes are TCRpMHC structures themselves
+
+```{r}
+tcremp_dists <- read_tsv("v_tcrpmhc_tcremp.tsv")
+
+fetch_dist <- function(dist_type) {
+  tcremp_dists |>
+    select(ends_with(dist_type)) |>
+    as.matrix() ->
+    mat
+  rownames(mat) <- tcremp_dists$clone_id
+  mat |>
+    dist() |>
+    as.matrix() |>
+    melt(value.name = paste0("tcremp_", dist_type)) |>
+    rename(clone_id.from = Var1, clone_id.to = Var2)
+}
+
+struct_alns_rmsd.mhc.dist <- struct_alns_rmsd.mhc |>
+  left_join(fetch_dist("a_v")) |>
+  left_join(fetch_dist("a_cdr3")) |>
+  left_join(fetch_dist("a_j")) |>
+  left_join(fetch_dist("b_v")) |>
+  left_join(fetch_dist("b_cdr3")) |>
+  left_join(fetch_dist("b_j"))
+```
+
+Plot them
+
+```{r}
+roundfactor <- 5.0
+plt2 <- struct_alns_rmsd.mhc.dist |>
+  melt(id.vars = 1:5,
+       variable.name = "region",
+       value.name = "distance") |>
+  filter(clone_id.from > clone_id.to) |>
+  mutate(chain = substr(region, 8, 8),
+         rmsdr = round(rmsd * roundfactor, 0) / roundfactor) |>
+  mutate(rmsdr = ifelse(rmsdr > 3, "4+", signif(rmsdr, 1)) |>
+           as.factor()) |>
+  ggplot(aes(x = rmsdr, 
+             group = rmsdr, 
+             y = distance,
+             fill = chain)) +
+  geom_boxplot(alpha = 0.7, size = 0.3, outlier.size = 1.0, 
+               outlier.shape = "-") +
+  xlab("RMSD, Å") + 
+  ylab("TCREMP distance") +
+  facet_wrap(. ~ region, scales = "free") +
+  scale_fill_brewer(guide = F, palette = "Set1") +
+  theme_minimal() +
+  ggtitle("TCRpMHCs records themselves as prototypes") +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+plt2
+```
+
+Distances from TCREMP where prototypes are sampled from OLGA
+
+```{r}
+tcremp_dists <- read_tsv("v_tcrpmhc_against_olga_tcremp.tsv.gz")
+
+struct_alns_rmsd.mhc.dist2 <- struct_alns_rmsd.mhc |>
+  left_join(fetch_dist("a_v")) |>
+  left_join(fetch_dist("a_cdr3")) |>
+  left_join(fetch_dist("a_j")) |>
+  left_join(fetch_dist("b_v")) |>
+  left_join(fetch_dist("b_cdr3")) |>
+  left_join(fetch_dist("b_j"))
+```
+
+Plot them
+
+```{r}
+plt3 <- struct_alns_rmsd.mhc.dist2 |>
+  melt(id.vars = 1:5,
+       variable.name = "region",
+       value.name = "distance") |>
+  filter(clone_id.from > clone_id.to) |>
+  mutate(chain = substr(region, 8, 8),
+         rmsdr = round(rmsd * roundfactor, 0) / roundfactor) |>
+  mutate(rmsdr = ifelse(rmsdr > 3, "4+", signif(rmsdr, 1)) |>
+           as.factor()) |>
+  ggplot(aes(x = rmsdr, 
+             group = rmsdr, 
+             y = distance,
+             fill = chain)) +
+  geom_boxplot(alpha = 0.7, size = 0.3, outlier.size = 1.0, 
+               outlier.shape = "-") +
+  xlab("RMSD, Å") + 
+  ylab("TCREMP distance") +
+  facet_wrap(. ~ region, scales = "free") +
+  scale_fill_brewer(guide = F, palette = "Set1") +
+  ggtitle("3000 random TRA-TRB pairs sampled using OLGA as prototypes") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+plt3
+```
+
+```{r}
+pdf("figs_5.pdf", width=7, height=11)
+(plt1 +
+   scale_x_continuous("", limits = c(0, 4)) +
+   theme(plot.tag = element_text(size = 16, face="bold"))) / 
+  (plt2 + 
+     xlab("") +
+     theme(plot.tag = element_text(size = 16, face="bold"))) / 
+  (plt3 + theme(plot.tag = element_text(size = 16, face="bold"))) +
+  plot_annotation(tag_levels = 'a')
+dev.off()
+```
+
+```{r}
+#END
+```
