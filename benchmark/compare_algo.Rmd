@@ -1,0 +1,52 @@
+---
+title: "Algorithm comparison"
+author: "M.S."
+date: "2025-01-26"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(ggplot2)
+library(patchwork)
+select = dplyr::select
+```
+
+```{r}
+load_data <- function(cchain){
+  paste0("compare_methods_results_",cchain,".csv") |>
+    read_csv() |>
+    select(tcremp_id, antigen.epitope, 
+           DM1, DM2, 
+           tcremp_clustering, giana_clustering, ismart_clustering) |>
+    pivot_longer(cols = c(tcremp_clustering, giana_clustering, ismart_clustering),
+                 names_to = "algorithm",
+                 values_to = "result") |>
+    mutate(algorithm = gsub("_clustering", "", algorithm)) |>
+    unique() |>
+    mutate(chain = cchain)
+}
+data <- rbind(
+  load_data("TRA"),
+  load_data("TRB")
+)
+glimpse(data)
+```
+
+```{r fig.width=7, fig.height=11}
+fig1 <- ggplot(data |> filter(result != "not_clustered"), 
+       aes(x = DM1, y = DM2)) +
+  geom_point_rast(data = data,
+                  color = "grey",
+                  alpha = 0.3) +
+  geom_point_rast(aes(color = result), size = 0.4) +
+  scale_color_brewer(palette = "Set1") +
+  facet_grid(algorithm ~ chain) +
+  theme_minimal() +
+  theme(aspect.ratio = 1, legend.position = "bottom")
+fig1
+pdf("figs_6.pdf", width=7, height=11)
+fig1
+dev.off()
+```
