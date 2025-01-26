@@ -24,6 +24,7 @@ library(fitdistrplus)
 # install.packages("devtools")
 #devtools::install_github("thomasp85/patchwork")
 library(patchwork)
+select = dplyr::select
 ```
 
 ## Properties of TCREMP distances
