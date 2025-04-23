@@ -1,3 +1,6 @@
+import sys
+sys.path.append("../")
+
 import time
 import pandas as pd
 import sys
@@ -12,6 +15,7 @@ from mir.distances.aligner import ClonotypeAligner
 
 from tcremp import get_resource_path
 from tcremp.arguments import get_arguments
+from tcremp.tcremp_cluster import run_dbscan_clustering
 
 
 def configure_logging(input_path, output_path, output_prefix):
@@ -143,11 +147,20 @@ def main():
         if 'TRB' in chain:
             column_names += [f'{i}_b_v', f'{i}_b_j', f'{i}_b_cdr3']
     embeddings = pd.DataFrame(embeddings, columns=column_names)
-
     logging.info(f'Finished {analysis_repertoire.total} clones in {time.time() - t0}')
+
+    if args.cluster:
+        clusters = run_dbscan_clustering(embeddings,
+                                         n_components=args.cluster_pc_components,
+                                         min_samples=args.cluster_min_samples)
+        cluster_df = pd.DataFrame({'clone_id': [x.id for x in analysis_repertoire],
+                                   'cluster_id': clusters})
+        cluster_df.to_csv(f'{output_path}/{output_prefix}_tcremp_clusters.tsv', sep='\t', index=False)
+
     embeddings['clone_id'] = [x.id for x in analysis_repertoire]
     embeddings = embeddings[['clone_id'] + column_names]
-    embeddings.to_csv(f'{output_path}/{output_prefix}_tcremp.tsv', sep='\t', index=False)
+    if args.save_dists:
+        embeddings.to_csv(f'{output_path}/{output_prefix}_tcremp.tsv', sep='\t', index=False)
 
 
 if __name__ == '__main__':

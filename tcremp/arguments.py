@@ -62,4 +62,17 @@ def get_arguments():
     parser.add_argument('-m', '--metrics', type=str, default='dissimilarity',
                         choices=['similarity', 'dissimilarity'],
                         help='Whether to calculate similarity or dissimilarity scores with TCRemP.')
+
+    parser.add_argument('-d', '--save-dists', type=bool, default=True,
+                        help='Whether to save the file with evaluated tcrEmP distances or not. Defaults to True.')
+
+    parser.add_argument('-cl', '--cluster', type=bool, default=True,
+                        help='Whether to perform the clustering or not. Defaults to True.')
+
+    parser.add_argument('-n_pc', '--cluster-pc-components', type=int, default=50,
+                        help="Number of PCA components for distances dimension reduction (default: 50)")
+
+    parser.add_argument('-ms', '--cluster-min-samples', type=int, default=3,
+                        help="min_samples parameter for DBSCAN used in clonotype clustering (default: 3)")
+
     return parser.parse_args()
