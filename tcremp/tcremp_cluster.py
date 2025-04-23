@@ -9,12 +9,6 @@ from sklearn.neighbors import NearestNeighbors
 from sklearn.preprocessing import StandardScaler
 from kneed import KneeLocator
 
-# Configure logging
-logging.basicConfig(
-    format="%(asctime)s - %(levelname)s - %(message)s", level=logging.INFO
-)
-
-
 def standardize_data(data):
     start = time.time()
     scaler = StandardScaler()
@@ -68,7 +62,7 @@ def cluster_dbscan(data, eps=None, min_samples=5):
     return labels
 
 
-def run_dbscan_clustering_from_dataframe(df: pd.DataFrame, n_components: int = 50, min_samples: int = 5):
+def run_dbscan_clustering(df: pd.DataFrame, n_components: int = 50, min_samples: int = 5):
     # Standardize data
     standardized = standardize_data(df.values)
 
@@ -84,6 +78,11 @@ def run_dbscan_clustering_from_dataframe(df: pd.DataFrame, n_components: int = 5
 
 
 def main():
+    # Configure logging
+    logging.basicConfig(
+        format="%(asctime)s - %(levelname)s - %(message)s", level=logging.INFO
+    )
+
     parser = argparse.ArgumentParser(description="Run clustering using PCA + DBSCAN")
     parser.add_argument("input_file", type=str, help="Path to input CSV file")
     parser.add_argument("output_file", type=str, help="Path to output CSV file")
@@ -95,7 +94,7 @@ def main():
     df = pd.read_csv(args.input_file, sep='\t')
 
     logging.info("Starting clustering...")
-    labels = run_dbscan_clustering_from_dataframe(df, n_components=args.components, min_samples=args.min_samples)
+    labels = run_dbscan_clustering(df, n_components=args.components, min_samples=args.min_samples)
 
     df["cluster"] = labels
     df.to_csv(args.output_file, sep='\t')
