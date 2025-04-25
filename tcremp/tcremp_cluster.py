@@ -9,6 +9,7 @@ from sklearn.neighbors import NearestNeighbors
 from sklearn.preprocessing import StandardScaler
 from kneed import KneeLocator
 
+
 def standardize_data(data):
     start = time.time()
     scaler = StandardScaler()
