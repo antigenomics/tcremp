@@ -96,6 +96,16 @@ def validate_sampling_size(rep: Repertoire, n, repertoire_name):
     return True
 
 
+def get_clonotype_representation(clonotype, locus):
+    def get_one_chain_repr(one_chain_clone):
+        return '_'.join([one_chain_clone.cdr3aa, one_chain_clone.v, one_chain_clone.j])
+
+    if locus == 'TRA_TRB':
+        return '/'.join([get_one_chain_repr(clonotype.chainA), get_one_chain_repr(clonotype.chainB)])
+    else:
+        return get_one_chain_repr(clonotype)
+
+
 def main():
     args = get_arguments()
     input_path, output_path, output_prefix, proto_path = configure_io(args)
@@ -148,16 +158,17 @@ def main():
             column_names += [f'{i}_b_v', f'{i}_b_j', f'{i}_b_cdr3']
     embeddings = pd.DataFrame(embeddings, columns=column_names)
     logging.info(f'Finished {analysis_repertoire.total} clones in {time.time() - t0}')
+    clone_ids = [get_clonotype_representation(c) for c in analysis_repertoire]
 
     if args.cluster:
         clusters = run_dbscan_clustering(embeddings,
                                          n_components=args.cluster_pc_components,
                                          min_samples=args.cluster_min_samples)
-        cluster_df = pd.DataFrame({'clone_id': [x.id for x in analysis_repertoire],
+        cluster_df = pd.DataFrame({'clone_id': clone_ids,
                                    'cluster_id': clusters})
         cluster_df.to_csv(f'{output_path}/{output_prefix}_tcremp_clusters.tsv', sep='\t', index=False)
 
-    embeddings['clone_id'] = [x.id for x in analysis_repertoire]
+    embeddings['clone_id'] = clone_ids
     embeddings = embeddings[['clone_id'] + column_names]
     if args.save_dists:
         embeddings.to_csv(f'{output_path}/{output_prefix}_tcremp.tsv', sep='\t', index=False)
