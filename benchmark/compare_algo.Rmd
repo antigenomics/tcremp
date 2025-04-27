@@ -32,6 +32,7 @@ data <- rbind(
   load_data("TRB")
 )
 glimpse(data)
+length(unique(data$tcremp_id))
 ```
 
 ```{r fig.width=7, fig.height=11}
@@ -49,4 +50,21 @@ fig1
 pdf("figs_6.pdf", width=7, height=11)
 fig1
 dev.off()
+```
+
+```{r}
+scores <- data |>
+              group_by(chain, epitope = antigen.epitope) |>
+              summarise(n = length(unique(tcremp_id))) |> 
+  filter(n >= 300) |>
+  left_join(read_csv("compare_methods_f1_retention.csv")) |>
+  mutate(algorithm = gsub("label_cluster_", "", method),
+         f1 = round(f1, 2),
+         retention = round(retention, 2)) |>
+  select(chain, antigen = epitope, algorithm, f1, retention, n)
+write_tsv(scores, "suppltbl1.txt")
+```
+
+```{r}
+#END
 ```
