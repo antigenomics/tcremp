@@ -1,0 +1,89 @@
+---
+title: "YF benchmark"
+author: "M.S."
+date: "2025-04-26"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(ggplot2)
+library(ggbeeswarm)
+library(patchwork)
+```
+
+```{r}
+data <- bind_rows(
+  read_csv("giana_summary.csv.gz") |> mutate(algo = "giana"),
+  read_csv("ismart_summary.csv.gz") |> mutate(algo = "ismart"),
+  read_csv("tcremp_summary.csv.gz") |> mutate(algo = "tcremp")
+)
+```
+
+```{r}
+glimpse(data)
+```
+
+```{r}
+data.s <- data |>
+  group_by(algo, cluster) |>
+  summarise(total = n(), yf_count = sum(vdjdb_yfv),
+            freq0 = sum(day0_usage), freq15 = sum(day15_usage))
+```
+
+```{r}
+plt1 <- ggplot(data.s, 
+       aes(x = freq0 / total, y = freq15 / total)) +
+  geom_point(aes(color = log2(freq15 / freq0) > 1.5)) +
+  geom_abline(intercept = 0, slope = 1, 
+              color = "black", 
+              linetype = "dashed") +
+  scale_x_log10("Mean clonotype size, d0") +
+  scale_y_log10("Mean clonotype size, d15") +
+  scale_color_brewer(guide = "none", "log2 FC > 1.5", palette = "Paired") +
+  facet_wrap(~algo) +
+  theme_bw() +
+  theme(aspect.ratio = 1,
+        legend.position = "bottom") +
+  ggtitle("Fold Change (FC) of clusters between d0 and d15 of YF vaccination")
+plt1
+```
+
+```{r}
+data.s |>
+  group_by(algo, expanded_cluster = log2(freq15 / freq0) > 1.5) |>
+  summarise(total = sum(total), yf_count = sum(yf_count), clusters = n()) |>
+  mutate(yf_frac = yf_count / total, yf_frac_sd = sqrt(yf_frac * (1 - yf_frac) / total)) -> data.s1
+
+plt2 <- data.s1 |>
+  ggplot(aes(x = expanded_cluster, 
+             fill = expanded_cluster,
+             y = yf_frac)) +
+  geom_bar(stat = "identity", color = "black", size = 0.4) +
+  geom_errorbar(aes(ymin = yf_frac,  
+                    ymax = yf_frac + 1.96 * yf_frac_sd),
+                width = 0.5, size = 0.4) +
+  geom_text(aes(y = yf_frac + 0.025, 
+                label = paste0(yf_count, "/", total, "\n(", clusters, ")"))) +
+  scale_y_continuous("Fraction of YF tetramer+ TCRs", limits = c(0, 0.11)) +
+  xlab("") +
+  scale_fill_brewer("Expanded cluster at d15? (log2 FC > 1.5)", 
+                     palette = "Paired") +
+  facet_wrap(~algo) +
+  theme_bw() +
+  theme(aspect.ratio = 1,
+        legend.position = "bottom")
+plt2
+```
+
+```{r fig.width=8, fig.height=8}
+pdf("figs_7.pdf", width = 7, height = 7)
+plt1 / 
+  (plt2 + theme(axis.text.x=element_blank(), axis.ticks.x=element_blank())) + 
+  plot_annotation(tag_levels = 'a')
+dev.off()
+```
+
+```{r}
+```
