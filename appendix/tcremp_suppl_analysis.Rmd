@@ -24,6 +24,7 @@ library(fitdistrplus)
 # install.packages("devtools")
 #devtools::install_github("thomasp85/patchwork")
 library(patchwork)
+select = dplyr::select
 ```
 
 ## Properties of TCREMP distances
@@ -142,7 +143,7 @@ distribution aka type II GEV. We will first scale
 $D_{ij} \rightarrow \frac{D_{ij} - \text{E}[D_{ij}]}{\text{SD}[D_{ij}]}$ 
 to simplify computations.
 
-```{r}
+```
 DDij.mean <- mean(data.1diag$DDij)
 DDij.sd <- sd(data.1diag$DDij)
 ffit <- brm(formula = y ~ 1, 
@@ -159,7 +160,7 @@ plot(ffit)
 
 Plot fit results
 
-```{r fig.width=4, fig.height=3}
+```
 n <- length(data.1diag$Dij)
 fmu <- fvars$fixed$Estimate
 fsigma <- fvars$spec_pars$Estimate[1]
@@ -205,7 +206,7 @@ fig2
 
 Save fig
 
-```{r}
+```
 pdf("figs_1.pdf", width = 7, height = 4)
 fig1 + 
   theme(plot.tag = element_text(size = 16, face="bold")) +
@@ -338,19 +339,19 @@ Note that here we use CDR3$\beta$ scores and omit V$\beta$, J$\beta$ as they are
 quite predictable/discrete and are subject to batch effect/bias.
 
 ```{r}
-read_proto <- function(prefix = "v_p", sz = 3000) {
-  tmp <- read_tsv(paste0(prefix, sz, ".txt.gz")) |>
-    select(cloneId, matches("b_\\d+_cdr3$")) |>
-    melt(id.vars = "cloneId") |>
-    dcast(cloneId ~ variable, mean)
-  rownames(tmp) <- as.character(tmp$cloneId)
-  tmp$cloneId <- NULL
-  tmp |> 
+read_proto <- function(prefix = "v_p", sz = 3000, all_dists = F) {
+  dat0 <- read_tsv(paste0(prefix, sz, ".txt.gz"))
+  datm <- dat0 |>
+      select(matches("b_\\d+_cdr3$"))
+  ann <- dat0 |>
+    select(tcremp_id, antigen.epitope)
+  dat1 <- datm |>
     as.matrix() |>
     dist() |>
     as.matrix() |>
     melt() |>
-    rename(from = Var1, to = Var2, Dp = value) 
+    rename(tcremp_id = Var1, proto_id = Var2, Dp = value) |>
+    left_join(ann)
 }
 v_p3000_d <- read_proto("v_p", 3000)
 v_b3000_d <- read_proto("v_b", 3000) |> rename(Db = Dp)
@@ -387,53 +388,69 @@ $\textbf{Q4}: D_{ij}^{Model} \sim D_{ij}^{RepSeq}\,\,\square$
 ## Check effect fom the number of prototypes
 
 Here we will again operate with CDR3$\beta$, look at the behavior of embeddings 
-with $n_{proto} \in (100, 1000, 2000, 3000)$ prototypes.
+with $n_{proto} \in (100, 250, 500, 1000)$ prototypes via UMAP. Load data
 
 ```{r}
-v_px <- bind_rows(
-  read_proto("v_p", 100) |> mutate(n_prot = 100),
-  read_proto("v_p", 1000) |> mutate(n_prot = 1000),
-  read_proto("v_p", 2000) |> mutate(n_prot = 2000),
-  read_proto("v_p", 3000) |> mutate(n_prot = 3000)
-) |>
-  left_join(read_tsv("v_p100.txt.gz") |>
-              select(from = cloneId, ag = antigen.epitope) |>
-              unique())
+v_px <-  read_tsv(paste0("v_p3000.txt.gz"))
+
+ann <- with(v_px,
+            tibble(tcremp_id, antigen.epitope))
+
+v_px <- v_px |> 
+  select(-cloneId, -antigen.epitope,
+         -a_v, -a_j, -a_cdr3aa,
+         -b_v, -b_j, -b_cdr3aa)
 ```
 
-Do UMAP
+Run PCA and UMAP
 
-```{r fig.width=6, fig.height=6}
-do_umap <- function(data) {
-  config <- umap.defaults
-  config$n_neighbors <- config$n_neighbors * 3
-  config$min_dist <- config$min_dist * 3
-  emb <- data |>
-    dcast(from ~ to, value.var = "Dp") |>
-    umap(config = config)
-  res <- emb$layout |>
-    as.tibble()
-  colnames(res) <- c("UMAP1", "UMAP2")
-  cbind(data |> select(from, ag), res)
+```{r}
+config <- umap.defaults
+config$n_neighbors <- config$n_neighbors * 10
+config$min_dist <- config$min_dist * 0.5
+
+make_umap <- function(n_prot){
+  emb <- v_px[, c(paste0("a_", 1:n_prot - 1, "_v"), 
+                  paste0("a_", 1:n_prot - 1, "_j"), 
+                  paste0("a_", 1:n_prot - 1, "_cdr3"), 
+                  paste0("b_", 1:n_prot - 1, "_v"),
+                  paste0("b_", 1:n_prot - 1, "_j"),
+                  paste0("b_", 1:n_prot - 1, "_cdr3"))]
+  emb <- prcomp(emb)$x[,1:100]
+  emb <- (emb |> umap(config = config))$layout
+  colnames(emb) <- c("UMAP1", "UMAP2")
+  emb <- cbind(ann, emb)
+  emb$n_prot <- n_prot
+  emb
 }
 
-v_px_umap <- v_px |>
-  group_by(n_prot) |>
-  group_modify(~ do_umap(.x))
+v_px_umap <- bind_rows(
+  make_umap(100),
+  make_umap(250),
+  make_umap(500),
+  make_umap(1000)
+)
+```
 
+Plot
+
+```{r fig.width=6, fig.height=6}
 fig8 <- v_px_umap |>
-  mutate(n_prot = paste0("p", n_prot)) |>
+  filter(!is.na(antigen.epitope)) |>
+  mutate(n_prot = paste0("p", n_prot) |>
+           factor(levels = c("p100", "p250", "p500", "p1000"))) |>
   group_by(n_prot) |>
-  mutate(sgn_GIL_1 = sign(sum(UMAP1 * startsWith(ag, "GIL"))),
-         sgn_GIL_2 = sign(sum(UMAP2 * startsWith(ag, "GIL")))) |>
+  mutate(sgn_1 = sign(sum(UMAP1 * startsWith(antigen.epitope, "NLV"))),
+         sgn_2 = sign(sum(UMAP2 * startsWith(antigen.epitope, "GIL")))) |>
   ungroup() |>
-  ggplot(aes(x = UMAP1 * sgn_GIL_1, y = UMAP2 * sgn_GIL_2, fill = ag)) +
-  geom_point_rast(shape = 21, 
-                  color = "grey25", 
-                  alpha = 0.7) +
+  ggplot(aes(x = rank(UMAP1 * sgn_1), 
+             y = rank(UMAP2 * sgn_2), 
+             color = antigen.epitope)) +
+  geom_point_rast(alpha = 0.7, size = 0.5) +
   facet_wrap(~n_prot) +
-  scale_color_brewer(palette = "PuOr") +
-  xlab("UMAP1") + ylab("UMAP2") +
+  scale_color_brewer(palette = "Set1") +
+  xlab("UMAP1, rank") + 
+  ylab("UMAP2, rank") +
   theme_minimal() +
   theme(aspect.ratio = 1,
         legend.position = "bottom")
@@ -448,7 +465,7 @@ fig8
 dev.off()
 ```
 
-$\textbf{Q5}: \text{UMAP stabilizes for}\,\,n_{proto} \geq 1000\,\,\square$
+$\textbf{Q5}: \text{UMAP stabilizes for}\,\,n_{proto} \geq 100\,\,\square$
 
 ```{r}
 print("Вот и сказочке конец")
