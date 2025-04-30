@@ -31,6 +31,7 @@ Issues = "https://github.com/antigenomics/tcremp/issues"
 
 [project.scripts]
 tcremp-run = "tcremp.tcremp_run:main"
+tcremp-cluster = "tcremp.tcremp_cluster:main"
 
 [tool.hatch.metadata]
 allow-direct-references = true 

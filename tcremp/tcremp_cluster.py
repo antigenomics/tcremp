@@ -63,7 +63,7 @@ def cluster_dbscan(data, eps=None, min_samples=5):
     return labels
 
 
-def run_dbscan_clustering(df: pd.DataFrame, n_components: int = 50, min_samples: int = 5):
+def run_dbscan_clustering(df: pd.DataFrame, n_components: int = 50, min_samples: int = 5, n_neighbors: int = 4):
     # Standardize data
     standardized = standardize_data(df.values)
 
@@ -71,7 +71,7 @@ def run_dbscan_clustering(df: pd.DataFrame, n_components: int = 50, min_samples:
     reduced = apply_pca(standardized, n_components=n_components)
 
     # Estimate optimal eps using k-nearest neighbors and KneeLocator
-    eps = estimate_dbscan_eps(reduced)
+    eps = estimate_dbscan_eps(reduced, n_neighbors=n_neighbors)
 
     # Run DBSCAN clustering
     labels = cluster_dbscan(reduced, eps=eps, min_samples=min_samples)
@@ -79,26 +79,30 @@ def run_dbscan_clustering(df: pd.DataFrame, n_components: int = 50, min_samples:
 
 
 def main():
-    # Configure logging
     logging.basicConfig(
         format="%(asctime)s - %(levelname)s - %(message)s", level=logging.INFO
     )
 
     parser = argparse.ArgumentParser(description="Run clustering using PCA + DBSCAN")
-    parser.add_argument("input_file", type=str, help="Path to input CSV file")
-    parser.add_argument("output_file", type=str, help="Path to output CSV file")
+    parser.add_argument("--input", type=str, help="Path to input CSV file")
+    parser.add_argument("--output", type=str, help="Path to output CSV file")
     parser.add_argument("--components", type=int, default=50, help="Number of PCA components (default: 50)")
     parser.add_argument("--min_samples", type=int, default=5, help="min_samples parameter for DBSCAN (default: 5)")
+    parser.add_argument("--kth_neighbor", type=int, default=4,
+                        help="k-th neighbor parameter for Knee estimation (default: 4)")
     args = parser.parse_args()
 
     logging.info("Loading data...")
-    df = pd.read_csv(args.input_file, sep='\t')
+    df = pd.read_csv(args.input, sep='\t')
 
     logging.info("Starting clustering...")
-    labels = run_dbscan_clustering(df, n_components=args.components, min_samples=args.min_samples)
+    labels = run_dbscan_clustering(df,
+                                   n_components=args.components,
+                                   min_samples=args.min_samples,
+                                   n_neighbors=args.kth_neighbor)
 
     df["cluster"] = labels
-    df.to_csv(args.output_file, sep='\t')
+    df.to_csv(args.output, sep='\t')
     logging.info(f"Clustering results saved to {args.output_file}")
 
 

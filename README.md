@@ -1,4 +1,4 @@
-# TCRemP: T-Cell Receptor sequence embedding via Prototypes
+TCRemP: T-Cell Receptor sequence embedding via Prototypes
 
 ![Splash](assets/splash.png)
 TCRemP is a package developed to perform T-cell receptor (TCR) sequence embedding. TCR sequences encode antigen
@@ -135,7 +135,7 @@ A simple flat format
 
 ## Running TCRemP
 
-### Basic usage
+### Basic usage of TCREmP
 
 Run the tool as
 
@@ -149,43 +149,65 @@ The command above will:
 - extracts TCR alpha and beta clonotypes from ``my_input_data.txt``
 - calculates distance scores from clonotypes for the built-in set of ``3000`` prototypes for each chain
 
-[//]: # (- performs **PCA** and saves transformed data)
+[//]: # "- performs **PCA** and saves transformed data"
 
-[//]: # (- runs **DBSCAN** clustering with parameters ``min_samples = 2``, ``eps`` value inferred by knee method, and saves)
+[//]: # "- runs **DBSCAN** clustering with parameters ``min_samples = 2``, ``eps`` value inferred by knee method, and saves"
 
-[//]: # (  resulting clusters)
+[//]: # "  resulting clusters"
 
-[//]: # (  All input will be saved in ``my_folder/``)
+[//]: # "  All input will be saved in ``my_folder/``"
 
 ### Command line parameters
 
 The parameters for running ``tcremp-run`` main script are the following:
 
-| parameter                  | short usage      | description                                                                    | available values                        | required | default value              |
-|----------------------------|------------------|--------------------------------------------------------------------------------|-----------------------------------------|----------|----------------------------|
-| --input                    | -i               | input clonotype table                                                          | path to file                            | yes      | -                          |
-| --output                   | -o               | pipeline output folder                                                         | path to directory                       | no       | tcremp_{inputfilename}/    |
-| --prefix                   | -e               | prefix name for distance file                                                  | str                                     | no       | tcremp_{inputfilename}/    |
-| --index-col                | -x               | index column where the clonotype IDs are stored                                | str                                     | no       | tcremp_{inputfilename}/    |
-| --chain                    | -c               | single or paired clonotype chains                                              | TRA, TRB, TRA_TRB                       | yes      | -                          |
-| --prototypes_path          | -p               | path to the custom input prototype table                                       | path to file                            | no       | data/example/v_tcrpmhc.txt |
+| parameter                  | short usage      | description                                                  | available values                        | required | default value              |
+| -------------------------- | ---------------- | ------------------------------------------------------------ | --------------------------------------- | -------- | -------------------------- |
+| --input                    | -i               | input clonotype table                                        | path to file                            | yes      | -                          |
+| --output                   | -o               | pipeline output folder                                       | path to directory                       | no       | tcremp_{inputfilename}/    |
+| --prefix                   | -e               | prefix name for distance file                                | str                                     | no       | tcremp_{inputfilename}/    |
+| --index-col                | -x               | index column where the clonotype IDs are stored              | str                                     | no       | tcremp_{inputfilename}/    |
+| --chain                    | -c               | single or paired clonotype chains                            | TRA, TRB, TRA_TRB                       | yes      | -                          |
+| --prototypes_path          | -p               | path to the custom input prototype table                     | path to file                            | no       | data/example/v_tcrpmhc.txt |
 | --n-prototypes             | -n               | number of prototypes to be selected for embedding supplemented prototype table | integer                                 | no       | None                       |
-| --sample-random-prototypes | -sample-random-p | whether to sample the prototypes randomly or not                               | bool                                    | no       | False                      |
-| --n-clonotypes             | -nc              | number of clonotypes to be selected from input file                            | integer                                 | no       | None                       |
-| --sample-random-clonotypes | -sample-random-c | whether to sample the clonotypes randomly or not                               | bool                                    | no       | False                      |
-| --species                  | -s               | species of built-in prototypes to be used                                      | HomoSapiens, MusMusculus, MacacaMulatta | no       | HomoSapiens                |
-| --random-seed              | -r               | random seed for random prototype selection                                     | integer                                 | no       | None                       |
-| --nproc                    | -np              | number of processes to perform calculcation with                               | integer                                 | no       | 1                          |
-| --lower-len-cdr3           | -llen            | filter out cdr3 with len <llen                                                 | integer                                 | no       | 30                         |
-| --higher-len-cdr3          | -hlen            | filter out cdr3 with len >hlen                                                 | integer                                 | no       | 30                         |
-| --metrics                  | -m               | which type of matrics to use: similarity or dissimilarity one                  | similarity, dissimilarity               | no       | dissimilarity              |
+| --sample-random-prototypes | -sample-random-p | whether to sample the prototypes randomly or not             | bool                                    | no       | False                      |
+| --n-clonotypes             | -nc              | number of clonotypes to be selected from input file          | integer                                 | no       | None                       |
+| --sample-random-clonotypes | -sample-random-c | whether to sample the clonotypes randomly or not             | bool                                    | no       | False                      |
+| --species                  | -s               | species of built-in prototypes to be used                    | HomoSapiens, MusMusculus, MacacaMulatta | no       | HomoSapiens                |
+| --random-seed              | -r               | random seed for random prototype selection                   | integer                                 | no       | None                       |
+| --nproc                    | -np              | number of processes to perform calculcation with             | integer                                 | no       | 1                          |
+| --lower-len-cdr3           | -llen            | filter out cdr3 with len <llen                               | integer                                 | no       | 30                         |
+| --higher-len-cdr3          | -hlen            | filter out cdr3 with len >hlen                               | integer                                 | no       | 30                         |
+| --metrics                  | -m               | which type of matrics to use: similarity or dissimilarity one | similarity, dissimilarity               | no       | dissimilarity              |
+| --save-dists               | -d               | whether to save the file with evaluated TCRemP distances or not | bool                                    | no       | True                       |
+| --cluster                  | -cl              | whether to perform the clustering or not                     | bool                                    | no       | True                       |
+| --cluster-pc-components    | -npc             | number of PCA components for distances dimension reduction   | integer                                 | no       | 50                         |
+| --cluster-min-samples      | -ms              | min_samples parameter for DBSCAN used in clonotype clustering | integer                                 | no       | 3                          |
+| --k-neightbors             | -kn              | k-th neighbor parameter for Knee estimation                  | integer                                 | no       | 4                          |
+
+### Separate TCREmP-cluster launch
+
+If you have a file with TCREmP distances calculated you can separately run the clustering step to adjust it to your data. Run the tool as
+
+```{bash}
+tcremp-cluster --input tcremp_distances.tsv --output tcremp_clusters.tsv --components 50 --min_samples 3 --kth_neighbor 4
+```
 
 ### Output
 
-The output file will contain the following **columns**:
+The output TCRemP file will contain the following **columns**:
 
-- clone_id - assigned identifier to each row of the input table (either tranferred from initial data or generated)
-- {i}_a_v, {i}_a_j, {i}_a_cdr3 - columns with distances to each alpha prototype
-- {i}_b_v, {i}_b_j, {i}_b_cdr3 - columns with distances to each beta prototype
+- clone_id - assigned identifier to each row of the input table (either transferred from initial data or generated)
+- cdr3aa_*{alpha/beta}* - cdr3aa sequences for alpha/beta chain
+- v_*{alpha/beta}* - v gene for alpha/beta chain
+- j_*{alpha/beta}* - j gene for alpha/beta chain
+- *{i}*\_a_v, *{i}*\_a\_j, *{i}*_a_cdr3 - columns with distances to each alpha prototype
+- *{i}*\_b_v, *{i}*\_b_j, *{i}*_b_cdr3 - columns with distances to each beta prototype
 
 Each line of the output file corresponds to one input clonotype.
+
+Clustering output file will contain the following **columns**:
+
+- clone_id - assigned identifier to each row of the input table (either transferred from initial data or generated)
+- cdr3aa_{alpha/beta} - cdr3aa sequences for alpha/beta chain
+- cluster - id of cluster, -1 if a clonotype is an outlier

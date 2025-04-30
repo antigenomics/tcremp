@@ -1,4 +1,5 @@
 import sys
+
 sys.path.append("../")
 
 import time
@@ -91,19 +92,29 @@ def validate_sampling_size(rep: Repertoire, n, repertoire_name):
     if n is None:
         return False
     if rep.total < n:
-        logging.warning(f'There are less than {n} clonotypes in {repertoire_name} repertoire. Would not perform sampling.')
+        logging.warning(
+            f'There are less than {n} clonotypes in {repertoire_name} repertoire. Would not perform sampling.')
         return False
     return True
 
 
-def get_clonotype_representation(clonotype, locus=None):
-    def get_one_chain_repr(one_chain_clone):
-        return '_'.join([one_chain_clone.cdr3aa, one_chain_clone.v.id, one_chain_clone.j.id])
+def get_representations_df(repertoire, locus=None):
+    clono_repr = pd.DataFrame({'clone_id': [c.id for c in repertoire]})
+
+    def add_one_chain_repr(clonotypes, locus):
+        clono_repr[f'cdr3aa_{locus}'] = pd.Series([c.cdr3aa for c in clonotypes])
+        clono_repr[f'v_{locus}'] = pd.Series([c.v.id for c in clonotypes])
+        clono_repr[f'j_{locus}'] = pd.Series([c.j.id for c in clonotypes])
+        # return '_'.join([one_chain_clone.cdr3aa, one_chain_clone.v.id, one_chain_clone.j.id])
 
     if locus is None:
-        return '/'.join([get_one_chain_repr(clonotype.chainA), get_one_chain_repr(clonotype.chainB)])
+        add_one_chain_repr([x.chainA for x in repertoire], locus='alpha')
+        add_one_chain_repr([x.chainB for x in repertoire], locus='beta')
+        # return '/'.join([add_one_chain_repr(clonotype.chainA), add_one_chain_repr(clonotype.chainB)])
     else:
-        return get_one_chain_repr(clonotype)
+        add_one_chain_repr(repertoire.clonotypes, locus)
+        # return add_one_chain_repr(clonotype)
+    return clono_repr
 
 
 def main():
@@ -159,19 +170,22 @@ def main():
             column_names += [f'{i}_b_v', f'{i}_b_j', f'{i}_b_cdr3']
     embeddings = pd.DataFrame(embeddings, columns=column_names)
     logging.info(f'Finished {analysis_repertoire.total} clones in {time.time() - t0}')
-    clone_ids = [get_clonotype_representation(c, locus) for c in analysis_repertoire]
+    clone_ids = pd.Series([c.id for c in analysis_repertoire])
+    clone_representations = get_representations_df(analysis_repertoire, locus)
 
     if args.cluster:
         clusters = run_dbscan_clustering(embeddings,
                                          n_components=args.cluster_pc_components,
-                                         min_samples=args.cluster_min_samples)
+                                         min_samples=args.cluster_min_samples,
+                                         n_neighbors=args.n_neighbors)
         cluster_df = pd.DataFrame({'clone_id': clone_ids,
-                                   'cluster_id': clusters})
+                                   'cluster_id': clusters}).merge(clone_representations)
         cluster_df.to_csv(f'{output_path}/{output_prefix}_tcremp_clusters.tsv', sep='\t', index=False)
 
-    embeddings['clone_id'] = clone_ids
-    embeddings = embeddings[['clone_id'] + column_names]
     if args.save_dists:
+        embeddings['clone_id'] = clone_ids
+        embeddings = embeddings[['clone_id'] + column_names]
+        embeddings = clone_representations.merge(embeddings)
         embeddings.to_csv(f'{output_path}/{output_prefix}_tcremp.tsv', sep='\t', index=False)
 
 
