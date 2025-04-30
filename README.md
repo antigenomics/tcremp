@@ -211,3 +211,28 @@ Clustering output file will contain the following **columns**:
 - clone_id - assigned identifier to each row of the input table (either transferred from initial data or generated)
 - cdr3aa_{alpha/beta} - cdr3aa sequences for alpha/beta chain
 - cluster - id of cluster, -1 if a clonotype is an outlier
+
+## Usage examples
+
+### VDJdb example
+
+Basic example of TCRemP usage is running it for VDJdb subsets. The input data for this example can be found in `data/example`. The derived embeddings were further visualized using PCA into 50 components and TSNE. The clonotypes are colored by the epitope. 
+
+![vdjdb](appendix/vdjdb_example.png)
+
+### Yellow Fever Vaccination example 
+
+Another example we introduce is the yellow fever vaccination clusters analysis. We merged the day 0 and day 15 datasets and ran TCRemP for the merged set of clonotypes. The clonotypes were further clustered and the enrichment score of each cluster on day 15 was calculated. For more details refer to the initial manuscript.
+
+Various parameters of k - rank of nearest neighbor for DBScan epsilon estimation. The results show that k=4 is the optimal parameter.
+
+![kth_neighbor](appendix/yfv_S1/tcremp_combined_panel_final.png)
+
+ 
+
+### 10X data example
+
+We also performed an analysis of the embeddings derived from patient 10X data. For more information on this example refer to the manuscript Figure 2.
+
+![10x](appendix/10x_proc/10x.png)
+
