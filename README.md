@@ -1,10 +1,8 @@
-TCRemP: T-Cell Receptor sequence embedding via Prototypes
+# TCRemP: T-Cell Receptor sequence embedding via Prototypes
 
 ![Splash](assets/splash.png)
 TCRemP is a package developed to perform T-cell receptor (TCR) sequence embedding. TCR sequences encode antigen
-specificity of T-cells and their repertoire obtained
-using [AIRR-Seq](https://www.antibodysociety.org/the-airr-community/) family of technologies serves as a blueprint the
-individual's adaptive immune system.
+specificity of T-cells and their repertoire obtained using [AIRR-Seq](https://www.antibodysociety.org/the-airr-community/) family of technologies serves as a blueprint the individual's adaptive immune system.
 In general, it is very challenging to define and measure similarity between TCR sequences that will properly reflect
 closeness in antigen recongition profiles. Defining a proper language model for TCRs is also a hard task due to their
 immense diversity both in terms of primary sequence organization and in terms of their protein structure.
@@ -51,6 +49,14 @@ Planned features:
 - [in progress] perform imputation to correctly handle mixed single-/paired-chain data
 - [in progress] implement B-cell receptor (BCR/antibody) prototypes to apply the method to antibody sequencing data
 
+## Citing
+
+Please cite the tool using the paper: 
+
+`Yulia Kremlyakova, Elizaveta Vlasova, Daniil Luppov, Mikhail Shugay, TCREMP: a bioinformatic pipeline for efficient embedding of T-cell receptor sequences from immune repertoire and single-cell sequencing data, Journal of Molecular Biology, 2025`
+
+(https://doi.org/10.1016/j.jmb.2025.169205)
+
 # Getting started
 
 ## Installation procedure and first run
@@ -60,8 +66,12 @@ One can simply install the software out-of-the-box using [pip](https://pypi.org/
 ```{bash}
 conda create -n tcremp ipython python=3.11
 conda activate tcremp
-pip install git+https://github.com/antigenomics/tcremp
+pip install git+https://github.com/antigenomics/tcremp@0.0.1-publication
 ```
+
+> `0.0.1-publication` tag corresponds to the version used in the publication *TCREMP, JMB, 2025*.  
+>
+> For the latest version install via the following command: `pip install git+https://github.com/antigenomics/tcremp`
 
 Or, in case of package version problems or other issues, clone the repository manually via git, create
 corresponding [conda](https://docs.conda.io/en/latest/) environment and install directly from sources:
