@@ -2,192 +2,71 @@ import sys
 
 sys.path.append("../")
 
-import time
-import pandas as pd
-import sys
-import logging
-from pathlib import Path
-
+from tcremp.arguments import get_arguments
+from tcremp.utils import configure_logging, load_prototype_repertoire, load_analysis_repertoire, \
+    get_representations_df, resolve_prototype_file, \
+    resolve_input_file, prepare_output_path, generate_output_prefix, subsample_repertoire
 from mir.common.segments import SegmentLibrary
-from mir.common.repertoire import Repertoire
-from mir.common.parser import AIRRParser, DoubleChainAIRRParser
+from tcremp.tcremp_cluster import run_dbscan_clustering
+import pandas as pd
+import time
+import logging
 from mir.embedding.prototype_embedding import PrototypeEmbedding, Metrics
 from mir.distances.aligner import ClonotypeAligner
 
-from tcremp import get_resource_path
-from tcremp.arguments import get_arguments
-from tcremp.tcremp_cluster import run_dbscan_clustering
 
+def run_tcremp_embedding(analysis_rep, proto_rep, segment_library, chain, metrics, nproc):
+    aligner = ClonotypeAligner.from_library(lib=segment_library)
+    embedder = PrototypeEmbedding(proto_rep, aligner=aligner, metrics=Metrics(metrics))
+    t0 = time.time()
+    emb = embedder.embed_repertoire(analysis_rep, threads=nproc, flatten_scores=True)
+    logging.info(f'Embeddings done in {time.time() - t0:.2f}s')
 
-def configure_logging(input_path, output_path, output_prefix):
-    formatter_str = '[%(asctime)s\t%(name)s\t%(levelname)s] %(message)s'
-    formatter = logging.Formatter(formatter_str)
-    logging.basicConfig(filename=f'{output_path}/{output_prefix}.log',
-                        format=formatter_str,
-                        level=logging.DEBUG)  # todo add logging level to cli
-
-    handler = logging.StreamHandler(sys.stderr)
-    handler.setLevel(logging.DEBUG)
-    handler.setFormatter(formatter)
-    logging.getLogger().addHandler(handler)
-    logging.info(
-        f'Running TCRemP for i="{input_path}", writing to o="{output_path.resolve()}/" under prefix="{output_prefix}"')
-
-
-def configure_io(args):
-    # IO setup
-    output_path = Path(args.output)
-    output_path.mkdir(parents=True, exist_ok=True)
-    input_path = Path(args.input)
-    proto_path = Path(args.prototypes_path if args.prototypes_path else get_resource_path('tcremp_prototypes_olga.tsv'))
-    output_prefix = args.prefix
-    if not output_prefix:
-        output_prefix = Path(input_path).stem
-    return str(input_path.resolve()), output_path, output_prefix, str(proto_path.resolve())
-
-
-def validate_cdr3_len(repertoire: Repertoire, llen: int, hlen: int, single_chain):
-    if llen is None:
-        llen = -1
-    if hlen is None:
-        hlen = 35
-
-    def create_len_function(single_chain):
-        if single_chain:
-            return lambda x: llen <= len(x.cdr3aa) < hlen
-        else:
-            return lambda x: llen <= len(x.chainA.cdr3aa) < hlen and llen <= len(x.chainB.cdr3aa) < hlen
-
-    logging.info(f'Filtering: {llen} <= cdr3_len < {hlen}')
-    len_function = create_len_function(single_chain)
-
-    filtered_repertoire = repertoire.subsample_by_lambda(lambda x: not len_function(x))
-    if filtered_repertoire.total > 0:
-        for c in filtered_repertoire:
-            logging.warning(f'Filtered out clonotype with id {c.id} {c} due to length filter')
-
-    return repertoire.subsample_by_lambda(len_function)
-
-
-def load_mirpy_objects(segment_library, data_path, proto_path, locus=None,
-                       mapping_column=None, llen=None, hlen=None):
-    parser = AIRRParser(lib=segment_library,
-                        locus=locus) if locus is not None else DoubleChainAIRRParser(lib=segment_library,
-                                                                                     mapping_column=mapping_column)
-    logging.info('Started loading clonotypes for analysis into MIR object.')
-    analysis_repertoire = Repertoire.load(
-        parser=parser,
-        path=data_path,
-    )
-    analysis_repertoire = validate_cdr3_len(analysis_repertoire, llen, hlen, locus is not None)
-    logging.info('Started loading prototypes into MIR object.')
-    proto_repertoire = Repertoire.load(
-        parser=parser,
-        path=proto_path,
-    )
-    return analysis_repertoire, proto_repertoire
-
-
-def validate_sampling_size(rep: Repertoire, n, repertoire_name):
-    if n is None:
-        return False
-    if rep.total < n:
-        logging.warning(
-            f'There are less than {n} clonotypes in {repertoire_name} repertoire. Would not perform sampling.')
-        return False
-    return True
-
-
-def get_representations_df(repertoire, locus=None):
-    clono_repr = pd.DataFrame({'clone_id': [c.id for c in repertoire]})
-
-    def add_one_chain_repr(clonotypes, locus):
-        clono_repr[f'cdr3aa_{locus}'] = pd.Series([c.cdr3aa for c in clonotypes])
-        clono_repr[f'v_{locus}'] = pd.Series([c.v.id for c in clonotypes])
-        clono_repr[f'j_{locus}'] = pd.Series([c.j.id for c in clonotypes])
-        # return '_'.join([one_chain_clone.cdr3aa, one_chain_clone.v.id, one_chain_clone.j.id])
-
-    if locus is None:
-        add_one_chain_repr([x.chainA for x in repertoire], locus='alpha')
-        add_one_chain_repr([x.chainB for x in repertoire], locus='beta')
-        # return '/'.join([add_one_chain_repr(clonotype.chainA), add_one_chain_repr(clonotype.chainB)])
-    else:
-        add_one_chain_repr(repertoire.clonotypes, locus)
-        # return add_one_chain_repr(clonotype)
-    return clono_repr
+    columns = []
+    for i in range(proto_rep.total):
+        if 'TRA' in chain:
+            columns += [f'{i}_a_v', f'{i}_a_j', f'{i}_a_cdr3']
+        if 'TRB' in chain:
+            columns += [f'{i}_b_v', f'{i}_b_j', f'{i}_b_cdr3']
+    return pd.DataFrame(emb, columns=columns)
 
 
 def main():
     args = get_arguments()
-    input_path, output_path, output_prefix, proto_path = configure_io(args)
-    configure_logging(input_path, output_path, output_prefix)
+
+    input_path = resolve_input_file(args.input)
+    proto_path = resolve_prototype_file(args.prototypes_path)
+    output_path = prepare_output_path(args.output)
+    prefix = generate_output_prefix(args.input, args.prefix)
+
+    configure_logging(input_path, output_path, prefix)
 
     chain = args.chain.split('_')
     locus = {'TRA': 'alpha', 'TRB': 'beta', 'TRA_TRB': None}[args.chain]
-    segment_library = SegmentLibrary.load_default(genes=chain,
-                                                  organisms=args.species)
+    lib = SegmentLibrary.load_default(genes=chain, organisms=args.species)
 
-    analysis_repertoire, proto_repertoire = load_mirpy_objects(segment_library=segment_library,
-                                                               data_path=input_path,
-                                                               proto_path=proto_path,
-                                                               locus=locus,
-                                                               mapping_column=args.index_col,
-                                                               llen=args.lower_len_cdr3,
-                                                               hlen=args.higher_len_cdr3)
+    rep = load_analysis_repertoire(input_path, lib, locus, args.index_col, args.lower_len_cdr3, args.higher_len_cdr3)
+    proto = load_prototype_repertoire(proto_path, lib, locus, args.index_col)
 
-    if validate_sampling_size(analysis_repertoire, args.n_clonotypes, 'analysis'):
-        analysis_repertoire = analysis_repertoire.sample_n(n=args.n_clonotypes,
-                                                           sample_random=args.sample_random_prototypes,
-                                                           random_seed=args.random_seed)
-    if validate_sampling_size(proto_repertoire, args.n_prototypes, 'prototypes'):
-        proto_repertoire = proto_repertoire.sample_n(n=args.n_prototypes,
-                                                     sample_random=args.sample_random_clonotypes,
-                                                     random_seed=args.random_seed)
+    rep = subsample_repertoire(rep, args.n_clonotypes, args.sample_random_prototypes, args.random_seed)
+    proto = subsample_repertoire(proto, args.n_prototypes, args.sample_random_clonotypes, args.random_seed)
 
-    logging.info('Processed input clonotype and prototype data.')
-    logging.info(f'There are {analysis_repertoire.total} analysis clonotypes and {proto_repertoire.total} prototypes.')
-    logging.info('Initializing aligner.')
-    t0 = time.time()
-    aligner = ClonotypeAligner.from_library(lib=segment_library)
-    logging.info(f'Initialized aligner object in {time.time() - t0}.')
-
-    embedding_maker = PrototypeEmbedding(proto_repertoire,
-                                         aligner=aligner,
-                                         metrics=Metrics(args.metrics),
-                                         )
-    logging.info(f'Running the embedding calculation.')
-
-    t0 = time.time()
-    embeddings = embedding_maker.embed_repertoire(analysis_repertoire,
-                                                  threads=args.nproc,
-                                                  flatten_scores=True)
-    logging.info(f'Embeddings have been evaluated')
-    column_names = []
-    for i in range(proto_repertoire.total):
-        if 'TRA' in chain:
-            column_names += [f'{i}_a_v', f'{i}_a_j', f'{i}_a_cdr3']
-        if 'TRB' in chain:
-            column_names += [f'{i}_b_v', f'{i}_b_j', f'{i}_b_cdr3']
-    embeddings = pd.DataFrame(embeddings, columns=column_names)
-    logging.info(f'Finished {analysis_repertoire.total} clones in {time.time() - t0}')
-    clone_ids = pd.Series([c.id for c in analysis_repertoire])
-    clone_representations = get_representations_df(analysis_repertoire, locus)
+    emb = run_tcremp_embedding(rep, proto, lib, chain, args.metrics, args.nproc)
+    reps = get_representations_df(rep, locus)
+    ids = pd.Series([c.id for c in rep])
 
     if args.cluster:
-        clusters = run_dbscan_clustering(embeddings,
-                                         n_components=args.cluster_pc_components,
-                                         min_samples=args.cluster_min_samples,
-                                         n_neighbors=args.n_neighbors)
-        cluster_df = pd.DataFrame({'clone_id': clone_ids,
-                                   'cluster_id': clusters}).merge(clone_representations)
-        cluster_df.to_csv(f'{output_path}/{output_prefix}_tcremp_clusters.tsv', sep='\t', index=False)
+        clust = run_dbscan_clustering(emb, args.cluster_pc_components,
+                                      args.cluster_min_samples, args.k_neighbors)
+        pd.DataFrame({'clone_id': ids, 'cluster_id': clust}).merge(reps).to_csv(
+            f"{output_path}/{prefix}_tcremp_clusters.tsv", sep='\t', index=False)
 
     if args.save_dists:
-        embeddings['clone_id'] = clone_ids
-        embeddings = embeddings[['clone_id'] + column_names]
-        embeddings = clone_representations.merge(embeddings)
-        embeddings.to_csv(f'{output_path}/{output_prefix}_tcremp.tsv', sep='\t', index=False)
+        emb['clone_id'] = ids
+        emb = emb[['clone_id'] + [c for c in emb.columns if c != 'clone_id']]
+        emb = reps.merge(emb)
+        emb.to_csv(f"{output_path}/{prefix}_tcremp.tsv", sep='\t', index=False)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

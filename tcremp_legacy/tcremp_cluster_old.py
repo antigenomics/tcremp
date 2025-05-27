@@ -1,4 +1,3 @@
-from pathlib import Path
 import numpy as np
 import pandas as pd
 import math
@@ -6,23 +5,18 @@ import math
 import sys
 sys.path.append("../")
 
-import time
-
 import statistics
-from scipy.spatial.distance import pdist, squareform, cdist
-from sklearn.model_selection import train_test_split
+from scipy.spatial.distance import pdist, cdist
 from sklearn.cluster import KMeans
 from sklearn.cluster import DBSCAN
-from sklearn.metrics import silhouette_samples, silhouette_score
 from sklearn.neighbors import NearestNeighbors
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 from kneed import KneeLocator
 
-import tcremp.data_proc as data_proc
-import tcremp.ml_utils as ml_utils
-import tcremp.motif_logo as motif_logo
-import tcremp.metrics as metrics
+import tcremp_legacy.ml_utils as ml_utils
+import tcremp_legacy.motif_logo as motif_logo
+import tcremp_legacy.metrics as metrics
 
 class TcrempClustering():
     def __init__(self, algo_name='dbscan', threshold=0.7):
@@ -70,11 +64,11 @@ class TcrempClustering():
         else:
             sys.exit(f'Unknown clustering algorithm "{self.algo_name}".')
         
-        clstr_labels, self.model[chain] = ml_utils.clstr_model(algorithm, X_data , data.clonotype_id)
+        clstr_labels, self.model[chain] = ml_utils.clstr_model(algorithm, X_data, data.clonotype_id)
         self.clstr_labels[chain] = clstr_labels.merge(annot_clones).drop(data.clonotype_id, axis=1)
         
         if self.label[chain] is not None:
-            self.binom_res[chain] = ml_utils.binominal_test(pd.merge(self.clstr_labels[chain],data.annot[chain]), 'cluster', label_cl, self.threshold)
+            self.binom_res[chain] = ml_utils.binominal_test(pd.merge(self.clstr_labels[chain], data.annot[chain]), 'cluster', label_cl, self.threshold)
             
             self.binom_res[chain] = self.binom_res[chain].rename({label_cl:'label_cluster'},axis=1)
             
@@ -195,12 +189,12 @@ class TcrempClustering():
             ,round(data_len*0.2), round(data_len*0.25), round(data_len*0.3)
             , round(data_len*0.4), round(data_len*0.5), round(data_len*0.6), round(data_len*0.7), round(data_len*0.8), round(data_len*0.9)]
     
-        silhouette_avg_scores = ml_utils.silhouette_avg_scores_kmeans(X_data,range_n_clusters)
+        silhouette_avg_scores = ml_utils.silhouette_avg_scores_kmeans(X_data, range_n_clusters)
     
         n_to_try = list(silhouette_avg_scores.keys())[list(silhouette_avg_scores.values()).index(max(silhouette_avg_scores.values()))]
     
         range_n_clusters = [round(n_to_try*0.7), round(n_to_try*0.8), round(n_to_try*0.9), n_to_try, round(n_to_try*1.1) , round(n_to_try*1.2) , round(n_to_try*1.3)]
-        silhouette_avg_scores = ml_utils.silhouette_avg_scores_kmeans(X_data,range_n_clusters)
+        silhouette_avg_scores = ml_utils.silhouette_avg_scores_kmeans(X_data, range_n_clusters)
 
         self.silhouette_n_clusters[chain] = list(silhouette_avg_scores.keys())[list(silhouette_avg_scores.values()).index(max(silhouette_avg_scores.values()))]
         
@@ -252,7 +246,7 @@ class TcrempClustering():
         for l in lengs:
             seqs = cluster_df[cluster_df['cdr3aa_len']==l][tcr_columns_paired[chain][0]].reset_index(drop=True)
             if len(seqs) >= 2:
-                motif_logo.plot_amino_logo(seqs, 'title',ax = list_ax[0])
+                motif_logo.plot_amino_logo(seqs, 'title', ax = list_ax[0])
                 list_ax[0].set_title(f"{chain}. Cluster: {c} {epi}\nFraction matched:{round(fr_matched,2)}\nCount of cdr3aa: {len(seqs)}")
         plot_v_j = clstr_data[clstr_data['cluster']==c]
 
@@ -292,7 +286,7 @@ class TcrempClustering():
                 #freq_res = freq/freq.sum(axis=0, keepdims=True)
                 #motif = pd.DataFrame(freq_res,index=alphabet)
                 #motif_logo.plot_amino_logo(motif, 'title',ax = list_ax[1])
-                motif_logo.plot_amino_logo(seqs, 'title',ax = list_ax[1])
+                motif_logo.plot_amino_logo(seqs, 'title', ax = list_ax[1])
                 list_ax[1].set_title(f"TRB. cdr3aa length: {l}")
     
         

@@ -1,19 +1,19 @@
 import sys, os, time, logging, warnings
 
-from tcremp.input_data_validation import validate_prototype_files
+from tcremp_legacy.input_data_validation import validate_prototype_files
 
 warnings.filterwarnings("ignore")
 
 from pathlib import Path
 import pandas as pd
-import tcremp.data_proc as data_proc
-import tcremp.ml_utils as ml_utils
+import tcremp_legacy.data_proc as data_proc
+import tcremp_legacy.ml_utils as ml_utils
 
 sys.path.append("../mirpy/")
 from mir.common.repertoire import Repertoire
 from mir.common.segments import SegmentLibrary
 from mir.common import parser
-from mir.distances import ClonotypeAligner, GermlineAligner
+from mir.distances import ClonotypeAligner
 from mir.comparative.match import DenseMatcher
 from tcremp import get_resource_path
 

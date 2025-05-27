@@ -1,9 +1,9 @@
 import numpy as np
 
-from sklearn.metrics import precision_recall_fscore_support, classification_report, adjusted_mutual_info_score
+from sklearn.metrics import adjusted_mutual_info_score
 from sklearn.metrics import multilabel_confusion_matrix
 
-import tcremp.ml_utils as ml_utils
+import tcremp_legacy.ml_utils as ml_utils
 
 
 def precision_recall_fscore(df, ytrue, ypred, label):

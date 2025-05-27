@@ -1,0 +1,80 @@
+from pathlib import Path
+import logging
+from mir.common.repertoire import Repertoire
+from mir.common.parser import AIRRParser, DoubleChainAIRRParser
+from tcremp import get_resource_path
+
+
+def configure_logging(input_path, output_path, output_prefix):
+    formatter_str = '[%(asctime)s\t%(name)s\t%(levelname)s] %(message)s'
+    formatter = logging.Formatter(formatter_str)
+    logging.basicConfig(filename=f'{output_path}/{output_prefix}.log',
+                        format=formatter_str,
+                        level=logging.DEBUG)
+    handler = logging.StreamHandler()
+    handler.setFormatter(formatter)
+    logging.getLogger().addHandler(handler)
+
+
+def prepare_output_path(output: str) -> Path:
+    path = Path(output)
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def resolve_input_file(file: str) -> str:
+    return str(Path(file).resolve())
+
+
+def resolve_prototype_file(path: str | None) -> str:
+    return str(Path(path).resolve() if path else Path(get_resource_path('tcremp_prototypes_olga.tsv')).resolve())
+
+
+def generate_output_prefix(input_file: str, custom_prefix: str | None) -> str:
+    return custom_prefix or Path(input_file).stem
+
+
+def validate_cdr3_len(repertoire, llen, hlen, single_chain):
+    llen = llen if llen is not None else -1
+    hlen = hlen if hlen is not None else 35
+    if single_chain:
+        f = lambda x: llen <= len(x.cdr3aa) < hlen
+    else:
+        f = lambda x: llen <= len(x.chainA.cdr3aa) < hlen and llen <= len(x.chainB.cdr3aa) < hlen
+    return repertoire.subsample_by_lambda(f)
+
+
+def load_analysis_repertoire(path, segment_library, locus, mapping_column, llen, hlen):
+    parser = AIRRParser(lib=segment_library, locus=locus) if locus else \
+             DoubleChainAIRRParser(lib=segment_library, mapping_column=mapping_column)
+    rep = Repertoire.load(parser=parser, path=path)
+    return validate_cdr3_len(rep, llen, hlen, single_chain=bool(locus))
+
+
+def load_prototype_repertoire(path, segment_library, locus, mapping_column):
+    parser = AIRRParser(lib=segment_library, locus=locus) if locus else \
+             DoubleChainAIRRParser(lib=segment_library, mapping_column=mapping_column)
+    return Repertoire.load(parser=parser, path=path)
+
+
+def subsample_repertoire(rep, n, random, seed):
+    if n and rep.total >= n:
+        return rep.sample_n(n, sample_random=random, random_seed=seed)
+    return rep
+
+
+def get_representations_df(rep, locus=None):
+    import pandas as pd
+    df = pd.DataFrame({'clone_id': [c.id for c in rep]})
+
+    def add_chain(clones, loc):
+        df[f'cdr3aa_{loc}'] = [c.cdr3aa for c in clones]
+        df[f'v_{loc}'] = [c.v.id for c in clones]
+        df[f'j_{loc}'] = [c.j.id for c in clones]
+
+    if locus is None:
+        add_chain([x.chainA for x in rep], 'alpha')
+        add_chain([x.chainB for x in rep], 'beta')
+    else:
+        add_chain(rep.clonotypes, locus)
+    return df

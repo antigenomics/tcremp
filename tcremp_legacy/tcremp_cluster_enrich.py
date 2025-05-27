@@ -5,8 +5,8 @@ import sys
 
 sys.path.append("../")
 
-import tcremp.ml_utils as ml_utils
-from tcremp.tcremp_pipeline import TcrempPipeline
+import tcremp_legacy.ml_utils as ml_utils
+from tcremp_legacy.tcremp_pipeline import TcrempPipeline
 from tcremp.tcremp_cluster import TcrempClustering
 
 

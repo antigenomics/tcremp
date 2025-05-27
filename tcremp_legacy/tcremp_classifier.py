@@ -8,7 +8,7 @@ sys.path.append("mirpy/")
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.preprocessing import label_binarize
-import tcremp.ml_utils as ml_utils
+import tcremp_legacy.ml_utils as ml_utils
 
 
 class TCRemP_clf:

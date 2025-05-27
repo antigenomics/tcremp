@@ -1,15 +1,13 @@
 import pandas as pd
-import numpy as np
-from pathlib import Path, PurePath
-import argparse, os, sys
-from time import strftime, gmtime
+from pathlib import Path
+import sys
 import logging
 
 from tcremp.arguments import get_arguments
 
 sys.path.append("../")
 sys.path.append("../mirpy/mirpy/")
-from tcremp.tcremp_pipeline import TcrempPipeline
+from tcremp_legacy.tcremp_pipeline import TcrempPipeline
 from tcremp.tcremp_cluster import TcrempClustering
 
 tcr_columns = {'TRA': ['a_cdr3aa', 'a_v', 'a_j'], 'TRB': ['b_cdr3aa', 'b_v', 'b_j'],

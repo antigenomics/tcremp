@@ -1,5 +1,5 @@
 import pandas as pd
-import tcremp.data_proc as data_proc
+import tcremp_legacy.data_proc as data_proc
 
 
 def validate_prototype_files(p_alpha_file, p_beta_file, p_file, chain, segments_path, prototypes_path,
