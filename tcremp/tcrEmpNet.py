@@ -48,8 +48,8 @@ def main():
 
     sample_representations = get_representations_df(sample_rep, locus)
     background_representations = get_representations_df(background_rep, locus)
-    sample_ids = pd.Series([c.id for c in sample_rep])
-    background_ids = pd.Series([c.id for c in background_rep])
+    sample_ids = pd.Series([f's_{c.id}' for c in sample_rep])
+    background_ids = pd.Series([f'b_{c.id}' for c in background_rep])
 
     joint_embeddings = pd.concat([sample_emb, background_emb])
     joint_representations = pd.concat([sample_representations, background_representations])
@@ -60,7 +60,7 @@ def main():
                                   args.cluster_min_samples, args.k_neighbors)
 
     cluster_df = pd.DataFrame({'clone_id': joint_ids, 'cluster_id': clust})
-    cluster_df = cluster_df.merge(joint_representations, on='clone_id')
+    cluster_df = cluster_df.merge(joint_representations)
     cluster_df.to_csv(f"{output_path}/{prefix}_tcremp_clusters.tsv", sep='\t', index=False)
     logging.info("Saved cluster assignments.")
 
@@ -88,9 +88,9 @@ def main():
     logging.info("Saved cluster summary with p-values.")
 
     enriched_clusters = summary.loc[
-        summary['enrichment_fdr'] < 0.05, ['cluster_id', 'enrichment_pvalue', 'enrichment_fdr']
+        summary['enrichment_pvalue'] < 0.05, ['cluster_id', 'enrichment_pvalue']
     ]
-    logging.info(f"{len(enriched_clusters)} clusters identified as enriched (FDR < 0.05).")
+    logging.info(f"{len(enriched_clusters)} clusters identified as enriched (pval < 0.05).")
 
     enriched_clonotypes = cluster_df.merge(enriched_clusters, on='cluster_id', how='inner')
     enriched_clonotypes = enriched_clonotypes.merge(joint_representations, on='clone_id', how='left')
@@ -101,7 +101,7 @@ def main():
 
     joint_embeddings['clone_id'] = joint_ids
     enriched_embeddings = enriched_clonotypes[
-        ['clone_id', 'cluster_id', 'source', 'enrichment_pvalue', 'enrichment_fdr']].merge(
+        ['clone_id', 'cluster_id', 'source', 'enrichment_pvalue']].merge(
         joint_embeddings, on='clone_id', how='left'
     )
     enriched_embeddings.to_csv(
