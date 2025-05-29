@@ -48,6 +48,8 @@ def main():
 
     sample_representations = get_representations_df(sample_rep, locus)
     background_representations = get_representations_df(background_rep, locus)
+    sample_representations['clone_id'] = 's_' + sample_representations['clone_id'].astype(str)
+    background_representations['clone_id'] = 'b_' + background_representations['clone_id'].astype(str)
     sample_ids = pd.Series([f's_{c.id}' for c in sample_rep])
     background_ids = pd.Series([f'b_{c.id}' for c in background_rep])
 
@@ -92,8 +94,7 @@ def main():
     ]
     logging.info(f"{len(enriched_clusters)} clusters identified as enriched (pval < 0.05).")
 
-    enriched_clonotypes = cluster_df.merge(enriched_clusters, on='cluster_id', how='inner')
-    enriched_clonotypes = enriched_clonotypes.merge(joint_representations, on='clone_id', how='left')
+    enriched_clonotypes = cluster_df.merge(enriched_clusters).merge(joint_representations)
     enriched_clonotypes.to_csv(
         f"{output_path}/{prefix}_enriched_clonotypes_tcremp.tsv", sep='\t', index=False
     )
@@ -101,9 +102,7 @@ def main():
 
     joint_embeddings['clone_id'] = joint_ids
     enriched_embeddings = enriched_clonotypes[
-        ['clone_id', 'cluster_id', 'source', 'enrichment_pvalue']].merge(
-        joint_embeddings, on='clone_id', how='left'
-    )
+        ['clone_id', 'cluster_id', 'source', 'enrichment_pvalue']].merge(joint_embeddings)
     enriched_embeddings.to_csv(
         f"{output_path}/{prefix}_enriched_embeddings_tcremp.tsv", sep='\t', index=False
     )
