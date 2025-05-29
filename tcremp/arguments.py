@@ -80,6 +80,7 @@ def get_arguments():
 
     return parser.parse_args()
 
+
 def get_arguments_enrich():
     parser = argparse.ArgumentParser(description='TCRempNet pipeline implementation')
     parser.add_argument('-is', '--sample', type=str, required=True,

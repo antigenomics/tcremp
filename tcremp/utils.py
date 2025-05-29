@@ -3,6 +3,9 @@ import logging
 from mir.common.repertoire import Repertoire
 from mir.common.parser import AIRRParser, DoubleChainAIRRParser
 from tcremp import get_resource_path
+import pandas as pd
+from scipy.stats import fisher_exact
+# from statsmodels.stats.multitest import multipletests
 
 
 def configure_logging(input_path, output_path, output_prefix):
@@ -78,3 +81,21 @@ def get_representations_df(rep, locus=None):
     else:
         add_chain(rep.clonotypes, locus)
     return df
+
+
+def add_fisher_pvalues(summary: pd.DataFrame, total_sample: int, total_background: int) -> pd.DataFrame:
+    pvals = []
+    for _, row in summary.iterrows():
+        a = row.get('sample', 0)
+        c = row.get('background', 0)
+        b = total_sample - a
+        d = total_background - c
+
+        contingency_table = [[a, b], [c, d]]
+        _, pval = fisher_exact(contingency_table, alternative="greater")
+        pvals.append(pval)
+
+    summary['enrichment_pvalue'] = pvals
+    # _, qvals, _, _ = multipletests(pvals, method="fdr_bh")
+    # summary['enrichment_fdr'] = qvals
+    return summary
