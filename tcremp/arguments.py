@@ -145,6 +145,12 @@ def get_arguments_enrich():
                         choices=['similarity', 'dissimilarity'],
                         help='Whether to calculate similarity or dissimilarity scores with TCRemP.')
 
+    parser.add_argument('--sample-embeddings', type=str, default=None,
+                        help='Optional path to precomputed sample embeddings in .parquet format.')
+
+    parser.add_argument('--background-embeddings', type=str, default=None,
+                        help='Optional path to precomputed background embeddings in .parquet format.')
+
     parser.add_argument('-d', '--save-dists', type=bool, default=True,
                         help='Whether to save the file with evaluated TCRemP distances or not. Defaults to True.')
 

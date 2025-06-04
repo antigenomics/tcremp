@@ -28,7 +28,7 @@ def run_tcremp_embedding(analysis_rep, proto_rep, segment_library, chain, metric
             columns += [f'{i}_a_v', f'{i}_a_j', f'{i}_a_cdr3']
         if 'TRB' in chain:
             columns += [f'{i}_b_v', f'{i}_b_j', f'{i}_b_cdr3']
-    return pd.DataFrame(emb, columns=columns)
+    return pd.DataFrame(emb, columns=columns).astype('uint16')
 
 
 def main():

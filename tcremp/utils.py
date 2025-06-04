@@ -6,6 +6,14 @@ from tcremp import get_resource_path
 import pandas as pd
 from scipy.stats import fisher_exact
 # from statsmodels.stats.multitest import multipletests
+import psutil
+import os
+
+
+def log_memory_usage(note=""):
+    process = psutil.Process(os.getpid())
+    mem_mb = process.memory_info().rss / 1024 / 1024
+    logging.info(f"[MEMORY] {note} RSS memory usage: {mem_mb:.2f} MB")
 
 
 def configure_logging(input_path, output_path, output_prefix):
