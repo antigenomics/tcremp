@@ -166,4 +166,12 @@ def get_arguments_enrich():
     parser.add_argument('-kn', "--k-neighbors", type=int, default=4,
                         help="k-th neighbor parameter for Knee estimation (default: 4)")
 
+    parser.add_argument('-se', '--sample-embedding', type=str,
+                        help='Optional path to sample embedding file (parquet). If not set, will be computed or '
+                             'default name used.')
+
+    parser.add_argument('-be', '--background-embedding', type=str,
+                        help='Optional path to background embedding file (parquet). If not set, will be computed or '
+                             'default name used.')
+
     return parser.parse_args()

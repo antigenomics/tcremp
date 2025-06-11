@@ -45,6 +45,27 @@ def generate_output_prefix(input_file: str, custom_prefix: str | None) -> str:
     return custom_prefix or Path(input_file).stem
 
 
+def resolve_embedding_file(custom_path: str | None, output_path: str, prefix: str, tag: str,
+                           must_exist: bool = False) -> Path:
+    """
+    Resolves the path to an embedding file.
+
+    Parameters:
+        custom_path: User-provided path to embedding file (can be None).
+        output_path: Base output directory.
+        prefix: Output prefix (usually derived from input file).
+        tag: Either "sample" or "background".
+        must_exist: If True, raises an error if the resolved file does not exist.
+
+    Returns:
+        Path object pointing to the resolved file.
+    """
+    path = Path(custom_path) if custom_path else Path(output_path) / f"{prefix}_{tag}_embeddings.parquet"
+    if must_exist and not path.exists():
+        raise FileNotFoundError(f"Embedding file for '{tag}' not found: {path}")
+    return path
+
+
 def validate_cdr3_len(repertoire, llen, hlen, single_chain):
     llen = llen if llen is not None else -1
     hlen = hlen if hlen is not None else 35

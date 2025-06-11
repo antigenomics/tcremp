@@ -4,6 +4,9 @@ import gc
 import logging
 import multiprocessing as mp
 import pandas as pd
+from pathlib import Path
+
+from pympler import asizeof, muppy, summary as sm
 
 sys.path.append("../")
 
@@ -12,7 +15,7 @@ from tcremp.utils import (
     configure_logging, load_prototype_repertoire, load_analysis_repertoire,
     get_representations_df, resolve_prototype_file, resolve_input_file,
     prepare_output_path, generate_output_prefix, subsample_repertoire,
-    log_memory_usage, add_fisher_pvalues
+    log_memory_usage, add_fisher_pvalues, resolve_embedding_file
 )
 from tcremp.tcremp_run import run_tcremp_embedding
 from mir.common.segments import SegmentLibrary
@@ -34,21 +37,42 @@ def setup_environment(args):
     return input_sample_path, input_background_path, proto_path, output_path, prefix, chain, locus, lib
 
 
-def process_repertoire(path, lib, locus, args, is_sample, proto, chain):
+def compute_embeddings_if_needed(path, args, is_sample, proto, chain, lib, locus, prefix, output_path):
+    tag = 'sample' if is_sample else 'background'
+    custom_path = args.sample_embedding if is_sample else args.background_embedding
+    emb_path = resolve_embedding_file(custom_path, output_path, prefix, tag)
+
+    if emb_path.exists():
+        logging.info(f"Found existing {tag} embeddings at {emb_path}")
+        return
+
+    logging.info(f"Computing {tag} embeddings...")
     rep = load_analysis_repertoire(path, lib, locus, args.index_col, args.lower_len_cdr3, args.higher_len_cdr3)
     rep = subsample_repertoire(rep, args.n_clonotypes, args.sample_random_prototypes, args.random_seed)
-    emb = run_tcremp_embedding(rep, proto, lib, chain, args.metrics, args.nproc)
+    run_tcremp_embedding(rep, proto, lib, chain, args.metrics, args.nproc, emb_path)
+
+    del rep
+    logging.info(f"Saved {tag} embeddings to {emb_path}")
+    log_memory_usage('Inside the function')
+
+
+def load_embeddings(path, args, is_sample, lib, locus, prefix, output_path):
+    tag = 'sample' if is_sample else 'background'
+    prefix_tag = 's_' if is_sample else 'b_'
+    custom_path = args.sample_embedding if is_sample else args.background_embedding
+    emb_path = resolve_embedding_file(custom_path, output_path, prefix, tag, must_exist=True)
+    emb = pd.read_parquet(emb_path)
+
+    rep = load_analysis_repertoire(path, lib, locus, args.index_col, args.lower_len_cdr3, args.higher_len_cdr3)
+    rep = subsample_repertoire(rep, args.n_clonotypes, args.sample_random_prototypes, args.random_seed)
+
     rep_df = get_representations_df(rep, locus)
-    prefix = 's_' if is_sample else 'b_'
-    rep_df['clone_id'] = prefix + rep_df['clone_id'].astype(str)
-    ids = pd.Series([f'{prefix}{c.id}' for c in rep])
+    rep_df['clone_id'] = prefix_tag + rep_df['clone_id'].astype(str)
+    ids = pd.Series([f'{prefix_tag}{c.id}' for c in rep])
+
     del rep
     gc.collect()
     return emb, rep_df, ids
-
-
-def load_temp_embeddings(path):
-    return pd.read_parquet(path)
 
 
 def compute_cluster_summary(cluster_df, sample_ids, background_ids):
@@ -69,37 +93,6 @@ def compute_cluster_summary(cluster_df, sample_ids, background_ids):
     return summary
 
 
-def load_embeddings_or_compute(path, args, is_sample, proto, chain, lib, locus, prefix, output_path):
-    from pathlib import Path
-    if is_sample:
-        logging.info("Loading sample repertoires...")
-        emb_path = args.sample_embeddings
-        prefix_tag = 's_'
-    else:
-        logging.info("Loading background repertoire...")
-        emb_path = args.background_embeddings
-        prefix_tag = 'b_'
-
-    default_emb_path = Path(output_path) / f"{prefix}_{'sample' if is_sample else 'background'}_embeddings.parquet"
-    if emb_path or default_emb_path.exists():
-        if not emb_path:
-            emb_path = default_emb_path
-        emb = load_temp_embeddings(emb_path)
-        rep = load_analysis_repertoire(path, lib, locus, args.index_col, args.lower_len_cdr3, args.higher_len_cdr3)
-        rep = subsample_repertoire(rep, args.n_clonotypes, args.sample_random_prototypes, args.random_seed)
-        rep_df = get_representations_df(rep, locus)
-        rep_df['clone_id'] = prefix_tag + rep_df['clone_id'].astype(str)
-        ids = pd.Series([f'{prefix_tag}{c.id}' for c in rep])
-        del rep
-        gc.collect()
-    else:
-        emb, rep_df, ids = process_repertoire(path, lib, locus, args, is_sample=is_sample, proto=proto, chain=chain)
-        emb.to_parquet(f"{output_path}/{prefix}_{'sample' if is_sample else 'background'}_embeddings.parquet",
-                       index=False)
-        logging.info(f"Saved {'sample' if is_sample else 'background'} embeddings to file.")
-    return emb, rep_df, ids
-
-
 def main():
     args = get_arguments_enrich()
 
@@ -113,23 +106,36 @@ def main():
     proto = load_prototype_repertoire(proto_path, lib, locus, args.index_col)
     proto = subsample_repertoire(proto, args.n_prototypes, args.sample_random_clonotypes, args.random_seed)
 
-    logging.info("Loading sample repertoires...")
-    sample_emb, sample_representations, sample_ids = load_embeddings_or_compute(
-        input_sample_path, args, is_sample=True, proto=proto, chain=chain, lib=lib, locus=locus,
-        prefix=prefix, output_path=output_path
-    )
+    logging.info("Computing sample embeddings if needed...")
+    compute_embeddings_if_needed(input_sample_path, args, is_sample=True, proto=proto, chain=chain, lib=lib,
+                                 locus=locus, prefix=prefix, output_path=output_path)
+    gc.collect()
+    log_memory_usage("After computing sample embeddings")
 
-    log_memory_usage("After sample embeddings")
+    all_objects = muppy.get_objects()
+    summary_lines = sm.format_(sm.summarize(all_objects))
+    logging.info("[Memory summary: all objects in memory]")
+    for line in summary_lines:
+        logging.info(line)
 
-    logging.info("Loading background repertoire...")
-    background_emb, background_representations, background_ids = load_embeddings_or_compute(
-        input_background_path, args, is_sample=False, proto=proto, chain=chain, lib=lib, locus=locus,
-        prefix=prefix, output_path=output_path
-    )
+    logging.info("Computing background embeddings if needed...")
+    compute_embeddings_if_needed(input_background_path, args, is_sample=False, proto=proto, chain=chain, lib=lib,
+                                 locus=locus, prefix=prefix, output_path=output_path)
+    gc.collect()
+    log_memory_usage("After computing background embeddings")
 
-    log_memory_usage("After background embedding")
+    logging.info("Loading sample embeddings...")
+    sample_emb, sample_representations, sample_ids = load_embeddings(input_sample_path, args, is_sample=True, lib=lib,
+                                                                     locus=locus, prefix=prefix,
+                                                                     output_path=output_path)
 
-    log_memory_usage('After representations')
+    logging.info("Loading background embeddings...")
+    background_emb, background_representations, background_ids = load_embeddings(input_background_path, args,
+                                                                                 is_sample=False, lib=lib, locus=locus,
+                                                                                 prefix=prefix, output_path=output_path)
+
+    log_memory_usage("After loading embeddings")
+
     joint_embeddings = pd.concat([sample_emb, background_emb], ignore_index=True)
     joint_representations = pd.concat([sample_representations, background_representations], ignore_index=True)
     joint_ids = pd.concat([sample_ids, background_ids], ignore_index=True)
