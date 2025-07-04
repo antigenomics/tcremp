@@ -1,22 +1,37 @@
+import sys
+
+sys.path.append("../")
+sys.path.append("../../mirpy")
+
 import numpy as np
 import pandas as pd
 import time
 import argparse
 import logging
-from sklearn.decomposition import PCA
+from sklearn.decomposition import PCA, IncrementalPCA
 from sklearn.cluster import DBSCAN
-from sklearn.neighbors import NearestNeighbors
-from sklearn.preprocessing import StandardScaler
 from kneed import KneeLocator
+from tcremp.utils import log_memory_usage
+import faiss
 
 
-def standardize_data(data):
+def standardize_data(data: np.ndarray):
+    if not np.issubdtype(data.dtype, np.floating):
+        data = data.astype(np.float32, copy=False)
+
     start = time.time()
-    scaler = StandardScaler()
-    standardized = scaler.fit_transform(data)
+
+    means = np.mean(data, axis=0, dtype=np.float32)
+    stds = np.std(data, axis=0, dtype=np.float32)
+
+    stds[stds == 0] = 1.0
+
+    data -= means
+    data /= stds
+
     elapsed = time.time() - start
-    logging.info(f"Standardization completed, time: {elapsed:.2f} sec.")
-    return standardized
+    logging.info(f"Standardization (in-place, overflow-safe) completed in {elapsed:.2f} sec.")
+    return data
 
 
 def apply_pca(data, n_components=50):
@@ -28,53 +43,82 @@ def apply_pca(data, n_components=50):
     return reduced
 
 
-def estimate_dbscan_eps(data, n_neighbors=4, quantile=0.05, poly_degree=10):
+def apply_pca_incremental(data, n_components=50, batch_size=100000):
     start = time.time()
-    neigh = NearestNeighbors(n_neighbors=n_neighbors)
-    nbrs = neigh.fit(data)
-    distances, _ = nbrs.kneighbors(data)
-    distances = np.sort(distances[:, n_neighbors - 1])
+    ipca = IncrementalPCA(n_components=n_components, batch_size=batch_size)
+    ipca.fit(data)
+    reduced = ipca.transform(data)
+    elapsed = time.time() - start
+    logging.info(f"Incremental PCA completed, time: {elapsed:.2f} sec.")
+    return reduced
 
-    knee = KneeLocator(range(1, len(distances) + 1),  # x values
-                       distances,  # y values
-                       S=1.0,  # parameter suggested from paper
+
+def get_k_neighbors_distance_matrix(data, n_neighbors=4):
+    data = np.ascontiguousarray(data.astype('float32'))
+    index = faiss.IndexFlatL2(data.shape[1])
+    index.add(data)
+
+    squared_distances, _ = index.search(data, n_neighbors)
+    distances = np.sqrt(squared_distances)
+    return distances
+
+
+def estimate_dbscan_eps(data, distances, poly_degree=10):
+    total_start = time.time()
+
+    total_num = len(data)
+    number_of_points_for_knee = min(total_num, max(20000, int(total_num * 0.2)))
+    chosen_elements = np.random.choice(distances, size=number_of_points_for_knee)
+    distances_sorted = np.sort(chosen_elements)
+
+    knee = KneeLocator(range(1, len(distances_sorted) + 1),
+                       distances_sorted,
+                       S=1.0,
                        curve="concave",
                        interp_method="polynomial",
                        polynomial_degree=poly_degree,
                        online=True,
                        direction="increasing", )
 
-    eps = distances[knee.knee] if knee.knee else distances[int(len(distances) * quantile)]
-    elapsed = time.time() - start
-    logging.info(f"Estimated eps for DBSCAN: {eps:.4f}, time: {elapsed:.2f} sec.")
+    eps = distances_sorted[knee.knee]
+    logging.info(f"Estimated eps for DBSCAN: {eps:.4f}, total time: {(time.time() - total_start):.2f} sec.")
     return eps
 
 
-def cluster_dbscan(data, eps=None, min_samples=5):
+def cluster_dbscan_with_filter(data, eps, min_samples, d1):
+    n_total = data.shape[0]
     start = time.time()
+    mask = d1 <= eps
+    n_filtered_out = np.sum(~mask)
+    logging.info(
+        f"Filtered out {n_filtered_out} points out of {n_total} ({n_filtered_out / n_total:.2%}) due to large d1 > eps")
+    filtered_data = data[mask]
     db = DBSCAN(eps=eps, min_samples=min_samples)
-    labels = db.fit_predict(data)
+    filtered_labels = db.fit_predict(filtered_data)
+
+    labels = np.full(data.shape[0], -1, dtype=int)
+    labels[mask] = filtered_labels
+
     elapsed = time.time() - start
-    n_clusters = len(set(labels)) - (1 if -1 in labels else 0)
+    n_clusters = len(set(filtered_labels)) - (1 if -1 in filtered_labels else 0)
     n_noise = list(labels).count(-1)
     logging.info(
-        f"DBSCAN completed: clusters = {n_clusters}, noise points = {n_noise}, time: {elapsed:.2f} sec."
-    )
+        f"Filtered DBSCAN completed: clusters = {n_clusters}, noise points = {n_noise}, time: {elapsed:.2f} sec.")
     return labels
 
 
-def run_dbscan_clustering(df: pd.DataFrame, n_components: int = 50, min_samples: int = 5, n_neighbors: int = 4):
-    # Standardize data
-    standardized = standardize_data(df.values)
+def prepare_data_for_clustering(df: pd.DataFrame, n_components):
+    df = standardize_data(df.values)
+    log_memory_usage('after standardization')
 
-    # Apply PCA and reduce dimensionality
-    reduced = apply_pca(standardized, n_components=n_components)
+    df = apply_pca(df, n_components=n_components)
+    log_memory_usage('after reduction')
+    return df
 
-    # Estimate optimal eps using k-nearest neighbors and KneeLocator
-    eps = estimate_dbscan_eps(reduced, n_neighbors=n_neighbors)
 
-    # Run DBSCAN clustering
-    labels = cluster_dbscan(reduced, eps=eps, min_samples=min_samples)
+def run_dbscan_clustering(df: pd.DataFrame, eps, closest_neigh_dist_array, min_samples: int = 5):
+    labels = cluster_dbscan_with_filter(df, eps=eps, min_samples=min_samples, d1=closest_neigh_dist_array)
+    log_memory_usage('after dbscan')
     return labels
 
 
@@ -93,17 +137,26 @@ def main():
     args = parser.parse_args()
 
     logging.info("Loading data...")
-    df = pd.read_csv(args.input, sep='\t')
+    df = pd.read_parquet(args.input)
+
+    logging.info('Preparing data for clustering...')
+    df = prepare_data_for_clustering(df, n_components=args.components)
+
+    logging.info('Evaluating k-neighbors distance matrix...')
+    distances = get_k_neighbors_distance_matrix(df, n_neighbors=args.kth_neighbor)
+
+    logging.info('Estimating epsilon for dbscan...')
+    eps = estimate_dbscan_eps(df, distances=distances[:, args.kth_neighbor - 1])
 
     logging.info("Starting clustering...")
     labels = run_dbscan_clustering(df,
-                                   n_components=args.components,
-                                   min_samples=args.min_samples,
-                                   n_neighbors=args.kth_neighbor)
+                                   eps=eps,
+                                   closest_neigh_dist_array=distances[:, 1],
+                                   min_samples=args.min_samples)
 
     df["cluster"] = labels
     df.to_csv(args.output, sep='\t')
-    logging.info(f"Clustering results saved to {args.output_file}")
+    logging.info(f"Clustering results saved to {args.output}")
 
 
 if __name__ == "__main__":

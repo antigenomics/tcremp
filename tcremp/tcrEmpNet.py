@@ -9,17 +9,19 @@ from pathlib import Path
 from pympler import asizeof, muppy, summary as sm
 
 sys.path.append("../")
+sys.path.append("../../mirpy")
 
 from tcremp.arguments import get_arguments_enrich
 from tcremp.utils import (
     configure_logging, load_prototype_repertoire, load_analysis_repertoire,
     get_representations_df, resolve_prototype_file, resolve_input_file,
     prepare_output_path, generate_output_prefix, subsample_repertoire,
-    log_memory_usage, add_fisher_pvalues, resolve_embedding_file
+    log_memory_usage, resolve_embedding_file, add_z_binom_pvalues, add_log_fold_change
 )
 from tcremp.tcremp_run import run_tcremp_embedding
 from mir.common.segments import SegmentLibrary
-from tcremp.tcremp_cluster import run_dbscan_clustering
+from tcremp.tcremp_cluster import run_dbscan_clustering, prepare_data_for_clustering, get_k_neighbors_distance_matrix, \
+    estimate_dbscan_eps
 
 
 def setup_environment(args):
@@ -75,9 +77,8 @@ def load_embeddings(path, args, is_sample, lib, locus, prefix, output_path):
     return emb, rep_df, ids
 
 
-def compute_cluster_summary(cluster_df, sample_ids, background_ids):
+def compute_cluster_summary(cluster_df, sample_ids):
     sample_ids_set = set(sample_ids)
-    background_ids_set = set(background_ids)
     cluster_df['source'] = cluster_df['clone_id'].apply(
         lambda x: 'sample' if x in sample_ids_set else 'background')
 
@@ -112,12 +113,6 @@ def main():
     gc.collect()
     log_memory_usage("After computing sample embeddings")
 
-    all_objects = muppy.get_objects()
-    summary_lines = sm.format_(sm.summarize(all_objects))
-    logging.info("[Memory summary: all objects in memory]")
-    for line in summary_lines:
-        logging.info(line)
-
     logging.info("Computing background embeddings if needed...")
     compute_embeddings_if_needed(input_background_path, args, is_sample=False, proto=proto, chain=chain, lib=lib,
                                  locus=locus, prefix=prefix, output_path=output_path)
@@ -138,12 +133,29 @@ def main():
 
     joint_embeddings = pd.concat([sample_emb, background_emb], ignore_index=True)
     joint_representations = pd.concat([sample_representations, background_representations], ignore_index=True)
+    sample_size = len(sample_emb)
+    del sample_emb
+    del background_emb
+
     joint_ids = pd.concat([sample_ids, background_ids], ignore_index=True)
     log_memory_usage("After concatenation")
 
-    logging.info("Running clustering...")
-    clust = run_dbscan_clustering(joint_embeddings, args.cluster_pc_components, args.cluster_min_samples,
-                                  args.k_neighbors)
+    logging.info("Running clustering...\n")
+
+    logging.info('Preparing data for clustering...')
+    df = prepare_data_for_clustering(joint_embeddings, n_components=args.cluster_pc_components)
+
+    logging.info('Evaluating k-neighbors distance matrix...')
+    distances = get_k_neighbors_distance_matrix(df, n_neighbors=args.k_neighbors)
+
+    logging.info('Estimating epsilon for dbscan (by sample embeddings)...')
+    eps = estimate_dbscan_eps(df[:sample_size], distances=distances[:sample_size, args.k_neighbors - 1])
+
+    logging.info("Starting clustering...")
+    clust = run_dbscan_clustering(df,
+                                  eps=eps,
+                                  closest_neigh_dist_array=distances[:, 1],
+                                  min_samples=args.cluster_min_samples)
     log_memory_usage("After clustering")
 
     cluster_df = pd.DataFrame({'clone_id': joint_ids, 'cluster_id': clust})
@@ -151,16 +163,18 @@ def main():
     cluster_df.to_csv(f"{output_path}/{prefix}_tcremp_clusters.tsv", sep='\t', index=False)
     logging.info("Saved cluster assignments.")
 
-    summary = compute_cluster_summary(cluster_df, sample_ids, background_ids)
-    summary = add_fisher_pvalues(summary, total_sample=len(sample_ids), total_background=len(background_ids))
-    summary[['cluster_id', 'cluster_size', 'sample', 'background', 'enrichment_pvalue']].to_csv(
+    summary = compute_cluster_summary(cluster_df, sample_ids)
+    summary = add_z_binom_pvalues(summary, total_sample=len(sample_ids), total_background=len(background_ids))
+    summary = add_log_fold_change(summary, total_sample=len(sample_ids), total_background=len(background_ids))
+    summary[['cluster_id', 'cluster_size', 'sample', 'background', 'enrichment_pvalue_zbinom', 'enrichment_fdr_zbinom',
+             'log_fold_change']].to_csv(
         f"{output_path}/{prefix}_summary_tcrempnet.tsv", sep='\t', index=False)
     logging.info("Saved cluster summary with p-values.")
 
     enriched_clusters = summary.loc[
-        summary['enrichment_pvalue'] < 0.05, ['cluster_id', 'enrichment_pvalue']
+        summary['enrichment_fdr_zbinom'] < 0.05, ['cluster_id', 'enrichment_pvalue']
     ]
-    logging.info(f"{len(enriched_clusters)} clusters identified as enriched (pval < 0.05).")
+    logging.info(f"{len(enriched_clusters)} clusters identified as enriched (fdr < 0.05).")
 
     enriched_clonotypes = cluster_df.merge(enriched_clusters).merge(joint_representations)
     enriched_clonotypes.to_csv(

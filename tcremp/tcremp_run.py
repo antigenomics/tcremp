@@ -1,16 +1,15 @@
 import sys
 
 sys.path.append("../")
+sys.path.append("../../mirpy")
 
 from tcremp.arguments import get_arguments
 from tcremp.utils import configure_logging, load_prototype_repertoire, load_analysis_repertoire, \
     get_representations_df, resolve_prototype_file, \
-    resolve_input_file, prepare_output_path, generate_output_prefix, subsample_repertoire
+    resolve_input_file, prepare_output_path, generate_output_prefix, subsample_repertoire, log_memory_usage
 from mir.common.segments import SegmentLibrary
 from tcremp.tcremp_cluster import run_dbscan_clustering
 
-from pympler import asizeof, muppy, summary
-import gc
 import logging
 import pandas as pd
 import time
@@ -25,15 +24,16 @@ def run_tcremp_embedding(analysis_rep, proto_rep, segment_library, chain, metric
     t0 = time.time()
     emb = embedder.embed_repertoire(analysis_rep, threads=nproc, flatten_scores=True)
     logging.info(f'Embeddings done in {time.time() - t0:.2f}s')
-
+    log_memory_usage('after embeddings done')
     columns = []
     for i in range(proto_rep.total):
         if 'TRA' in chain:
             columns += [f'{i}_a_v', f'{i}_a_j', f'{i}_a_cdr3']
         if 'TRB' in chain:
             columns += [f'{i}_b_v', f'{i}_b_j', f'{i}_b_cdr3']
-
-    df = pd.DataFrame(emb, columns=columns).astype('uint16')
+    log_memory_usage('after col creation')
+    df = pd.DataFrame(emb, columns=columns)
+    log_memory_usage('after df creation')
     if save_dists:
         df.to_parquet(filename, index=False)
     return df
@@ -48,11 +48,13 @@ def main():
     prefix = generate_output_prefix(args.input, args.prefix)
 
     configure_logging(input_path, output_path, prefix)
+    log_memory_usage('init')
 
     chain = args.chain.split('_')
     locus = {'TRA': 'alpha', 'TRB': 'beta', 'TRA_TRB': None}[args.chain]
     lib = SegmentLibrary.load_default(genes=chain, organisms=args.species)
 
+    log_memory_usage('before load')
     logging.info('Started loading clonotypes for analysis into MIR object.')
     rep = load_analysis_repertoire(input_path, lib, locus, args.index_col, args.lower_len_cdr3, args.higher_len_cdr3)
     logging.info(f'Analysis repertoire: {rep}')
@@ -62,13 +64,20 @@ def main():
 
     rep = subsample_repertoire(rep, args.n_clonotypes, args.sample_random_prototypes, args.random_seed)
     proto = subsample_repertoire(proto, args.n_prototypes, args.sample_random_clonotypes, args.random_seed)
+    rep.serialize().to_csv(f'{output_path}/{prefix}_rep.tsv', sep='\t')
     logging.info(f'Finished subsampling. Proto repertoire: {proto}, analysis repertoire: {rep}')
+    log_memory_usage('before tcremp')
+
+    reps = get_representations_df(rep, locus)
+    reps.to_csv(f'{output_path}/{prefix}_tcremp_representations.tsv', sep='\t', index=False)
+    reps = None
 
     emb = run_tcremp_embedding(rep, proto, lib, chain, args.metrics, args.nproc,
                                f'{output_path}/{prefix}_embeddings.parquet')
-    reps = get_representations_df(rep, locus)
-    ids = pd.Series([c.id for c in rep])
 
+    reps = pd.read_csv(f'{output_path}/{prefix}_tcremp_representations.tsv', sep='\t')
+    ids = reps.clone_id
+    log_memory_usage('after reps reading')
     if args.cluster:
         clust = run_dbscan_clustering(emb, args.cluster_pc_components,
                                       args.cluster_min_samples, args.k_neighbors)

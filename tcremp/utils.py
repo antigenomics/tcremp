@@ -1,10 +1,14 @@
 from pathlib import Path
 import logging
+
+import numpy as np
 from mir.common.repertoire import Repertoire
 from mir.common.parser import AIRRParser, DoubleChainAIRRParser
+from statsmodels.stats.multitest import multipletests
+
 from tcremp import get_resource_path
 import pandas as pd
-from scipy.stats import fisher_exact
+from scipy.stats import fisher_exact, binom, norm
 # from statsmodels.stats.multitest import multipletests
 import psutil
 import os
@@ -13,7 +17,7 @@ import os
 def log_memory_usage(note=""):
     process = psutil.Process(os.getpid())
     mem_mb = process.memory_info().rss / 1024 / 1024
-    logging.info(f"[MEMORY] {note} RSS memory usage: {mem_mb:.2f} MB")
+    logging.debug(f"[MEMORY] {note} RSS memory usage: {mem_mb:.2f} MB")
 
 
 def configure_logging(input_path, output_path, output_prefix):
@@ -78,14 +82,14 @@ def validate_cdr3_len(repertoire, llen, hlen, single_chain):
 
 def load_analysis_repertoire(path, segment_library, locus, mapping_column, llen, hlen):
     parser = AIRRParser(lib=segment_library, locus=locus) if locus else \
-             DoubleChainAIRRParser(lib=segment_library, mapping_column=mapping_column)
+        DoubleChainAIRRParser(lib=segment_library, mapping_column=mapping_column)
     rep = Repertoire.load(parser=parser, path=path)
     return validate_cdr3_len(rep, llen, hlen, single_chain=bool(locus))
 
 
 def load_prototype_repertoire(path, segment_library, locus, mapping_column):
     parser = AIRRParser(lib=segment_library, locus=locus) if locus else \
-             DoubleChainAIRRParser(lib=segment_library, mapping_column=mapping_column)
+        DoubleChainAIRRParser(lib=segment_library, mapping_column=mapping_column)
     return Repertoire.load(parser=parser, path=path)
 
 
@@ -124,7 +128,57 @@ def add_fisher_pvalues(summary: pd.DataFrame, total_sample: int, total_backgroun
         _, pval = fisher_exact(contingency_table, alternative="greater")
         pvals.append(pval)
 
-    summary['enrichment_pvalue'] = pvals
-    # _, qvals, _, _ = multipletests(pvals, method="fdr_bh")
-    # summary['enrichment_fdr'] = qvals
+    summary['enrichment_pvalue_fisher'] = pvals
+    _, qvals, _, _ = multipletests(pvals, method="fdr_bh")
+    summary['enrichment_fdr_fisher'] = qvals
+    return summary
+
+
+def add_binom_pvalues(summary: pd.DataFrame, total_sample: int, total_background: int) -> pd.DataFrame:
+    pvals = []
+    for _, row in summary.iterrows():
+        a = row.get('sample', 0)
+        b = row.get('background', 0)
+
+        p = b / total_background
+        pval = min(binom.sf(k=a, n=total_sample, p=p), binom.cdf(k=a, n=total_sample, p=p))
+        pvals.append(pval)
+
+    summary['enrichment_pvalue_binom'] = pvals
+    _, qvals, _, _ = multipletests(pvals, method="fdr_bh")
+    summary['enrichment_fdr_binom'] = qvals
+    return summary
+
+
+def add_z_binom_pvalues(summary: pd.DataFrame, total_sample: int, total_background: int) -> pd.DataFrame:
+    pvals = []
+    for _, row in summary.iterrows():
+        a = row.get('sample', 0)
+        b = row.get('background', 0)
+
+        p = b / total_background
+
+        z = (total_background * a - total_sample * b) / np.sqrt(
+            total_sample * (b + 1e-6) * (total_background - b))
+        pval = 2 * (1 - norm.cdf(np.abs(z)))
+
+        pvals.append(pval)
+
+    summary['enrichment_pvalue_zbinom'] = pvals
+    _, qvals, _, _ = multipletests(pvals, method="fdr_bh")
+    summary['enrichment_fdr_zbinom'] = qvals
+    return summary
+
+
+def add_log_fold_change(summary: pd.DataFrame, total_sample: int, total_background: int) -> pd.DataFrame:
+    log_fc = []
+    for _, row in summary.iterrows():
+        a = row.get('sample', 0)
+        b = row.get('background', 0)
+
+        fold_enrichment = (a / total_sample) / ((b + 1e-9) / total_background)
+        log_fold_enrichment = np.log10(fold_enrichment)
+
+        log_fc.append(log_fold_enrichment)
+    summary['log_fold_change'] = log_fc
     return summary
