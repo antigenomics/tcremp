@@ -134,6 +134,7 @@ def main():
     joint_embeddings = pd.concat([sample_emb, background_emb], ignore_index=True)
     joint_representations = pd.concat([sample_representations, background_representations], ignore_index=True)
     sample_size = len(sample_emb)
+    background_size = len(background_emb)
     del sample_emb
     del background_emb
 
@@ -149,7 +150,11 @@ def main():
     distances = get_k_neighbors_distance_matrix(df, n_neighbors=args.k_neighbors)
 
     logging.info('Estimating epsilon for dbscan (by sample embeddings)...')
-    eps = estimate_dbscan_eps(df[:sample_size], distances=distances[:sample_size, args.k_neighbors - 1])
+    eps = estimate_dbscan_eps(df, distances=distances[:, args.k_neighbors - 1])
+    # eps_sample = estimate_dbscan_eps(df[:sample_size], distances=distances[:sample_size, args.k_neighbors - 1])
+    # eps_background = estimate_dbscan_eps(df[sample_size:], distances=distances[sample_size:, args.k_neighbors - 1])
+    # eps = (eps_sample * sample_size + eps_background * background_size) / (sample_size + background_size)
+    # logging.info(f'Weighted epsilon is {eps}')
 
     logging.info("Starting clustering...")
     clust = run_dbscan_clustering(df,
@@ -172,7 +177,7 @@ def main():
     logging.info("Saved cluster summary with p-values.")
 
     enriched_clusters = summary.loc[
-        summary['enrichment_fdr_zbinom'] < 0.05, ['cluster_id', 'enrichment_pvalue']
+        summary['enrichment_fdr_zbinom'] < 0.05, ['cluster_id', 'enrichment_pvalue_zbinom']
     ]
     logging.info(f"{len(enriched_clusters)} clusters identified as enriched (fdr < 0.05).")
 
@@ -184,7 +189,7 @@ def main():
 
     joint_embeddings['clone_id'] = joint_ids
     enriched_embeddings = enriched_clonotypes[
-        ['clone_id', 'cluster_id', 'source', 'enrichment_pvalue']].merge(joint_embeddings)
+        ['clone_id', 'cluster_id', 'source', 'enrichment_pvalue_zbinom']].merge(joint_embeddings)
     enriched_embeddings.to_csv(
         f"{output_path}/{prefix}_enriched_embeddings_tcremp.tsv", sep='\t', index=False
     )

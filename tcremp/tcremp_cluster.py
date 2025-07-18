@@ -86,6 +86,10 @@ def estimate_dbscan_eps(data, distances, poly_degree=10):
 
 
 def cluster_dbscan_with_filter(data, eps, min_samples, d1):
+    try:
+        data = data.to_numpy()
+    except Exception:
+        pass
     n_total = data.shape[0]
     start = time.time()
     mask = d1 <= eps
