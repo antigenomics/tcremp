@@ -177,7 +177,7 @@ def main():
         clusters = run_dbscan_clustering(embeddings,
                                          n_components=args.cluster_pc_components,
                                          min_samples=args.cluster_min_samples,
-                                         n_neighbors=args.n_neighbors)
+                                         n_neighbors=args.k_neighbors)
         cluster_df = pd.DataFrame({'clone_id': clone_ids,
                                    'cluster_id': clusters}).merge(clone_representations)
         cluster_df.to_csv(f'{output_path}/{output_prefix}_tcremp_clusters.tsv', sep='\t', index=False)
