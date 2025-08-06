@@ -186,7 +186,7 @@ def main():
         embeddings['clone_id'] = clone_ids
         embeddings = embeddings[['clone_id'] + column_names]
         embeddings = clone_representations.merge(embeddings)
-        embeddings.to_csv(f'{output_path}/{output_prefix}_tcremp.tsv', sep='\t', index=False)
+        embeddings.to_parquet(f'{output_path}/{output_prefix}_tcremp.parquet', index=False)
 
 
 if __name__ == '__main__':
