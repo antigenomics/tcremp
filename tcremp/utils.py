@@ -1,6 +1,7 @@
 from pathlib import Path
 import logging
 import os
+import tempfile
 
 import matplotlib.pyplot as plt
 import pandas as pd
@@ -9,6 +10,13 @@ from sklearn.decomposition import PCA
 from sklearn.manifold import TSNE
 from sklearn.preprocessing import StandardScaler
 
+from tcremp.constants import (
+    DEFAULT_PROTOTYPE_CHAINS,
+    DEFAULT_PAIRED_CHAIN_COMPONENTS,
+    DEFAULT_SINGLE_CHAIN_PROTOTYPE_RESOURCES,
+    SUPPORTED_CHAINS,
+    SUPPORTED_SINGLE_CHAINS,
+)
 from tcremp import get_resource_path
 
 try:
@@ -61,10 +69,94 @@ def resolve_input_file(file):
     return str(Path(file).resolve())
 
 
-def resolve_prototype_file(path):
+def _resolve_resource_if_exists(name):
+    try:
+        return Path(get_resource_path(name)).resolve()
+    except Exception:
+        return None
+
+
+def _paired_locus_label(chain):
+    return {"TRA": "alpha", "TRB": "beta"}.get(chain, chain.lower())
+
+
+def _prepare_single_chain_prototype_df(path, chain):
+    df = pd.read_csv(path, sep="\t")
+    required = {"v_call", "j_call", "junction_aa"}
+    missing = required - set(df.columns)
+    if missing:
+        raise ValueError(
+            f"Prototype table '{path}' is missing required columns for chain '{chain}': "
+            f"{sorted(missing)}"
+        )
+
+    if "clone_id" not in df.columns:
+        df = df.copy()
+        df.insert(0, "clone_id", [f"{chain}_{i}" for i in range(len(df))])
+
+    df = df[["clone_id", "v_call", "j_call", "junction_aa"]].copy()
+    df.insert(1, "locus", _paired_locus_label(chain))
+    return df
+
+
+def _build_paired_default_prototype_file(chain):
+    component_chains = DEFAULT_PAIRED_CHAIN_COMPONENTS[chain]
+    component_paths = []
+    for component_chain in component_chains:
+        resource_name = DEFAULT_SINGLE_CHAIN_PROTOTYPE_RESOURCES[component_chain]
+        resource_path = _resolve_resource_if_exists(resource_name)
+        if resource_path is None:
+            return None
+        component_paths.append(resource_path)
+
+    prepared = [
+        _prepare_single_chain_prototype_df(path, component_chain)
+        for path, component_chain in zip(component_paths, component_chains)
+    ]
+    n_pairs = min(len(df) for df in prepared)
+    if n_pairs == 0:
+        raise ValueError(f"Built-in prototype tables for '{chain}' are empty.")
+
+    merged_parts = []
+    for df, component_chain in zip(prepared, component_chains):
+        part = df.head(n_pairs).copy().reset_index(drop=True)
+        part["clone_id"] = [f"{chain}_{i}" for i in range(n_pairs)]
+        part["locus"] = _paired_locus_label(component_chain)
+        merged_parts.append(part)
+
+    merged = pd.concat(merged_parts, ignore_index=True)
+    fd, temp_path = tempfile.mkstemp(prefix=f"tcremp_{chain.lower()}_prototypes_", suffix=".tsv")
+    os.close(fd)
+    temp_file = Path(temp_path)
+    if temp_file.exists():
+        temp_file.unlink()
+    merged.to_csv(temp_path, sep="\t", index=False)
+    return temp_file.resolve()
+
+
+def resolve_prototype_file(path, chain):
     if path:
         return str(Path(path).resolve())
-    return str(Path(get_resource_path("tcremp_prototypes_olga.tsv")).resolve())
+    if chain not in DEFAULT_PROTOTYPE_CHAINS:
+        raise ValueError(
+            f"No built-in prototype table is available for chain '{chain}'. "
+            "Please provide --prototypes-path explicitly."
+        )
+
+    if chain in DEFAULT_SINGLE_CHAIN_PROTOTYPE_RESOURCES:
+        resource_path = _resolve_resource_if_exists(DEFAULT_SINGLE_CHAIN_PROTOTYPE_RESOURCES[chain])
+        if resource_path is not None:
+            return str(resource_path)
+
+    if chain in DEFAULT_PAIRED_CHAIN_COMPONENTS:
+        paired_path = _build_paired_default_prototype_file(chain)
+        if paired_path is not None:
+            return str(paired_path)
+
+    raise ValueError(
+        f"No built-in prototype table is available for chain '{chain}'. "
+        "Expected split resource files for this chain in tcremp/resources."
+    )
 
 
 def generate_output_prefix(input_file, custom_prefix):
@@ -180,8 +272,8 @@ def get_representations_df(rep, locus=None):
         df[f"j_{loc}"] = [c.j.id for c in clones]
 
     if locus is None:
-        add_chain([x.chainA for x in rep], "alpha")
-        add_chain([x.chainB for x in rep], "beta")
+        add_chain([x.chainA for x in rep], "TRA")
+        add_chain([x.chainB for x in rep], "TRB")
     else:
         add_chain(rep.clonotypes, locus)
     return df
@@ -260,3 +352,4 @@ def tsne_plot(data_plot, to_color, title, output_path, to_size=None, legend=True
     fig.tight_layout()
     fig.savefig(output_path, dpi=200, bbox_inches="tight")
     plt.close(fig)
+

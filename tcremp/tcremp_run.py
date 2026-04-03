@@ -12,6 +12,7 @@ from mir.embedding.prototype_embedding import PrototypeEmbedding, Metrics
 from mir.distances.aligner import ClonotypeAligner
 
 from tcremp.arguments import get_arguments
+from tcremp.constants import DEFAULT_PAIRED_CHAIN_COMPONENTS
 from tcremp.enrichment import (
     annotate_clusters_with_enrichment,
     compute_cluster_enrichment,
@@ -45,6 +46,10 @@ def _safe_embedding_threads(nproc, n_clonotypes, min_batch_size=32):
     return max(1, min(int(nproc), int(n_clonotypes), by_batch))
 
 
+def _embedding_prefixes(chain):
+    return [locus[-1].lower() for locus in chain]
+
+
 def run_tcremp_embedding(analysis_rep, proto_rep, segment_library, chain, metrics, nproc):
     aligner = ClonotypeAligner.from_library(lib=segment_library)
     logging.info("Started embeddings calculation")
@@ -69,11 +74,17 @@ def run_tcremp_embedding(analysis_rep, proto_rep, segment_library, chain, metric
     log_memory_usage("after embeddings done")
 
     columns = []
+    prefixes = _embedding_prefixes(chain)
     for i in range(proto_rep.total):
-        if "TRA" in chain:
-            columns += [f"{i}_a_v", f"{i}_a_j", f"{i}_a_cdr3"]
-        if "TRB" in chain:
-            columns += [f"{i}_b_v", f"{i}_b_j", f"{i}_b_cdr3"]
+        for prefix in prefixes:
+            columns += [f"{i}_{prefix}_v", f"{i}_{prefix}_j", f"{i}_{prefix}_cdr3"]
+
+    n_columns = emb.shape[1] if hasattr(emb, "shape") and len(emb.shape) > 1 else None
+    if n_columns is not None and len(columns) != n_columns:
+        raise ValueError(
+            f"Embedding column count mismatch for chain {chain}: "
+            f"generated {len(columns)} names for {n_columns} embedding columns."
+        )
 
     df = pd.DataFrame(emb, columns=columns)
     log_memory_usage("after embeddings dataframe creation")
@@ -84,14 +95,14 @@ def main():
     args = get_arguments()
 
     input_path = resolve_input_file(args.input)
-    proto_path = resolve_prototype_file(args.prototypes_path)
+    proto_path = resolve_prototype_file(args.prototypes_path, args.chain)
     output_path = prepare_output_path(args.output)
     output_prefix = generate_output_prefix(args.input, args.prefix)
     configure_logging(input_path, output_path, output_prefix)
     log_memory_usage("init")
 
     chain = args.chain.split('_')
-    locus = {'TRA': 'alpha', 'TRB': 'beta', 'TRA_TRB': None}[args.chain]
+    locus = None if args.chain in DEFAULT_PAIRED_CHAIN_COMPONENTS else args.chain
     segment_library = SegmentLibrary.load_default(genes=chain, organisms=args.species)
     if args.nproc is None:
         args.nproc = max(1, min(8, os.cpu_count() or 1))
@@ -218,3 +229,4 @@ def main():
 
 if __name__ == '__main__':
     main()
+

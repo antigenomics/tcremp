@@ -1,5 +1,7 @@
 import argparse
 
+from tcremp.constants import DEFAULT_PAIRED_CHAIN_COMPONENTS, SUPPORTED_CHAINS, SUPPORTED_SINGLE_CHAINS
+
 
 def add_common_io_args(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
     parser.add_argument("-i", "--input", type=str, required=True,
@@ -22,9 +24,13 @@ def add_run_metadata_args(parser: argparse.ArgumentParser) -> argparse.ArgumentP
 
 
 def add_common_embedding_args(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
+    paired_modes = ", ".join(f'"{x}"' for x in DEFAULT_PAIRED_CHAIN_COMPONENTS)
     parser.add_argument("-c", "--chain", type=str, required=True,
-                        choices=["TRA", "TRB", "TRA_TRB"],
-                        help='Use "TRA" or "TRB" for single-chain input, "TRA_TRB" for paired input.')
+                        choices=list(SUPPORTED_CHAINS),
+                        help="Single-chain input supports "
+                             + ", ".join(f'\"{x}\"' for x in SUPPORTED_SINGLE_CHAINS)
+                             + f", while paired-chain input uses {paired_modes}. "
+                               "Built-in prototypes are resolved from per-chain resource files when available.")
     parser.add_argument("-p", "--prototypes-path", type=str,
                         help="Path to a user-specified prototypes file.")
     parser.add_argument("-n", "--n-prototypes", type=int,
@@ -143,3 +149,4 @@ def get_arguments_enrich(args=None):
 
 def get_arguments_cluster(args=None):
     return build_cluster_parser().parse_args(args)
+
