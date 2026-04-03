@@ -154,6 +154,8 @@ def main():
         sep="\t",
         index=False,
     )
+    clone_ids = clone_representations["clone_id"]
+    processed_clones = len(clone_ids)
 
     embeddings = run_tcremp_embedding(
         analysis_repertoire,
@@ -163,9 +165,7 @@ def main():
         args.metrics,
         args.nproc,
     )
-    logging.info("Finished processing %d clones.", analysis_repertoire.total)
-
-    clone_ids = clone_representations["clone_id"]
+    logging.info("Finished processing %d clones.", processed_clones)
 
     if args.cluster:
         clusters = run_dbscan_clustering(
