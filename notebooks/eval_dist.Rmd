@@ -1,0 +1,113 @@
+---
+title: "TCRemp distance properties"
+author: "M.S."
+date: "2024-11-27"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(reshape2)
+library(stringr)
+library(ggplot2)
+```
+
+```{r}
+data <- read_tsv("res_TRB.txt.gz") |>
+  rename(from = id)  |>
+  mutate(from = as.character(from)) |>
+  melt() |>
+  filter(grepl("cdr3",variable))
+data$to <- str_split_fixed(data$variable, "_", 2)[,1]
+data$variable <- NULL
+data <- data |>
+  mutate(from = paste0("x", from),
+         to = paste0("x", to)) |>
+  group_by(from) |>
+  mutate(value.scaled = (value - mean(value)) / sd(value)) |>
+  ungroup()
+glimpse(data)
+```
+
+```{r}
+data1 <- data |> filter(as.character(to) > as.character(from))
+
+ggplot(data1, aes(x = value)) +
+  geom_density()
+
+ggplot(data1, aes(x = scale(value))) +
+  geom_density()
+
+qqnorm(scale(data1$value))
+qqline(scale(data1$value))
+```
+
+```{r}
+data.m <- data |> 
+  dcast(from ~ to)
+rownames(data.m) <- data.m$from
+data.m$from <- NULL
+data.m <- as.matrix(data.m)
+```
+
+```{r}
+dists <- dist(data.m) |> 
+  as.matrix() |>
+  melt() |>
+  rename(from = Var1, to = Var2, dist_eucl = value) |>
+  mutate(from = as.character(from), to = as.character(to))
+```
+
+```{r}
+data.m[data.m > 100] <- 100
+data.m[data.m < -100] <- -100
+dists2 <- dist(data.m) |> 
+  as.matrix() |>
+  melt() |>
+  rename(from = Var1, to = Var2, dist_eucl2 = value) |>
+  mutate(from = as.character(from), to = as.character(to))
+```
+
+```{r}
+data.comb <- data1 |>
+  merge(dists) |>
+  merge(dists2)
+```
+
+```{r}
+data.comb |>
+  ggplot(aes(x = value.scaled, 
+             y = dist_eucl)) +
+  geom_point(alpha = 0.1) +
+  geom_density_2d() +
+  geom_smooth(method = "lm") +
+  xlab("True distance") +
+  ylab("TCRemp dist") +
+  theme_bw()
+
+data.comb |>
+  ggplot(aes(x = value.scaled, 
+             y = dist_eucl2)) +
+  geom_point(alpha = 0.1) +
+  geom_density_2d() +
+  geom_smooth(method = "lm") +
+  xlab("True distance") +
+  ylab("TCRemp dist") +
+  theme_bw()
+```
+
+```{r}
+cor.test(data.comb$value.scaled, data.comb$dist_eucl, method = "pearson")
+cor.test(data.comb$value.scaled, data.comb$dist_eucl2, method = "pearson")
+```
+
+```{r}
+cor.test(data.comb$value.scaled, data.comb$dist_eucl, method = "spearman")
+cor.test(data.comb$value.scaled, data.comb$dist_eucl2, method = "spearman")
+```
+
+```{r}
+#FIN
