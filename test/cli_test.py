@@ -121,7 +121,7 @@ class TestCLI(unittest.TestCase):
 
                 self.run_cli(TCREMP_RUN_MODULE, args)
 
-                tcremp_path = output_dir / f"{prefix}_tcremp.tsv"
+                tcremp_path = output_dir / f"{prefix}_tcremp.parquet"
                 clusters_path = output_dir / f"{prefix}_tcremp_clusters.tsv"
                 reps_path = output_dir / f"{prefix}_tcremp_representations.tsv"
 
@@ -129,7 +129,7 @@ class TestCLI(unittest.TestCase):
                 self.assertTrue(clusters_path.exists(), clusters_path)
                 self.assertTrue(reps_path.exists(), reps_path)
 
-                tcremp_df = pd.read_csv(tcremp_path, sep="\t")
+                tcremp_df = pd.read_parquet(tcremp_path)
                 cluster_df = pd.read_csv(clusters_path, sep="\t")
                 self.assertIn("clone_id", tcremp_df.columns)
                 self.assertIn("cluster_id", cluster_df.columns)

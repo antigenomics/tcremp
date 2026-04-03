@@ -224,7 +224,6 @@ def main():
         embeddings["clone_id"] = clone_ids
         embeddings = embeddings[["clone_id"] + [c for c in embeddings.columns if c != "clone_id"]]
         embeddings = clone_representations.merge(embeddings)
-        embeddings.to_csv(f"{output_path}/{output_prefix}_tcremp.tsv", sep="\t", index=False)
         embeddings.to_parquet(f"{output_path}/{output_prefix}_tcremp.parquet", index=False)
 
 
