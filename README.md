@@ -218,6 +218,8 @@ The output TCRemP file will contain the following **columns**:
 
 Each line of the output file corresponds to one input clonotype.
 
+When distance saving is enabled, TCRemP writes both `*_tcremp.tsv` and `*_tcremp.parquet`.
+
 Clustering output file will contain the following **columns**:
 
 - clone_id - assigned identifier to each row of the input table (either transferred from initial data or generated)

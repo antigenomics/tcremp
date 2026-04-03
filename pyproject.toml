@@ -30,7 +30,8 @@ dependencies = [
         "psutil>=5.9",
         "matplotlib>=3.7,<4",
         "seaborn>=0.12,<1", 
-        "pympler>=1.1"
+        "pympler>=1.1",
+        "pyarrow>=15,<22"
 ]
 
 [project.urls]
