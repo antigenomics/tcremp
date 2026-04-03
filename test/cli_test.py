@@ -87,9 +87,9 @@ class TestCLI(unittest.TestCase):
     @unittest.skipUnless(MIR_AVAILABLE, "mir is required for tcremp-run integration tests")
     def test_tcremp_run_smoke_configs(self):
         configs = [
-            {"chain": "TRA", "n_clonotypes": "10", "n_prototypes": "8"},
-            {"chain": "TRB", "n_clonotypes": "10", "n_prototypes": "8"},
-            {"chain": "TRA_TRB", "n_clonotypes": "6", "n_prototypes": "8"},
+            {"chain": "TRA", "n_clonotypes": "10", "n_prototypes": "8", "include_index_col": False},
+            {"chain": "TRB", "n_clonotypes": "10", "n_prototypes": "8", "include_index_col": True},
+            {"chain": "TRA_TRB", "n_clonotypes": "6", "n_prototypes": "8", "include_index_col": True},
         ]
 
         for config in configs:
@@ -108,8 +108,10 @@ class TestCLI(unittest.TestCase):
                     "-n", config["n_prototypes"],
                     "-nc", config["n_clonotypes"],
                     "-np", "1",
-                    "-x", "clone_id",
                 ]
+
+                if config["include_index_col"]:
+                    args += ["-x", "clone_id"]
 
                 if chain == "TRB":
                     args += [
@@ -131,10 +133,14 @@ class TestCLI(unittest.TestCase):
 
                 tcremp_df = pd.read_parquet(tcremp_path)
                 cluster_df = pd.read_csv(clusters_path, sep="\t")
-                self.assertIn("clone_id", tcremp_df.columns)
                 self.assertIn("cluster_id", cluster_df.columns)
                 self.assertGreater(len(tcremp_df), 0)
                 self.assertGreater(len(cluster_df), 0)
+                self.assertFalse(any(col in tcremp_df.columns for col in ["v_call", "j_call", "junction_aa", "locus"]))
+                if config["include_index_col"]:
+                    self.assertIn("clone_id", tcremp_df.columns)
+                else:
+                    self.assertNotIn("clone_id", tcremp_df.columns)
 
                 if chain == "TRB":
                     self.assertTrue((output_dir / f"{prefix}_tcremp_pca.tsv").exists())

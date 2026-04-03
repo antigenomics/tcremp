@@ -221,9 +221,9 @@ def main():
             )
 
     if args.save_dists:
-        embeddings["clone_id"] = clone_ids
-        embeddings = embeddings[["clone_id"] + [c for c in embeddings.columns if c != "clone_id"]]
-        embeddings = clone_representations.merge(embeddings)
+        if args.index_col:
+            embeddings["clone_id"] = clone_ids
+            embeddings = embeddings[["clone_id"] + [c for c in embeddings.columns if c != "clone_id"]]
         embeddings.to_parquet(f"{output_path}/{output_prefix}_tcremp.parquet", index=False)
 
 
