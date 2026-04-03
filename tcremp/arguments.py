@@ -35,12 +35,12 @@ def add_common_embedding_args(parser: argparse.ArgumentParser) -> argparse.Argum
                         help="Path to a user-specified prototypes file.")
     parser.add_argument("-n", "--n-prototypes", type=int,
                         help="Number of prototypes to use for embedding.")
-    parser.add_argument("-sample_random_p", "--sample-random-prototypes", type=bool, default=False,
-                        help="Whether to sample prototypes randomly.")
+    parser.add_argument("-sample_random_p", "--sample-random-prototypes", action="store_true",
+                        help="Sample prototypes randomly.")
     parser.add_argument("-nc", "--n-clonotypes", type=int,
                         help="Number of clonotypes to process.")
-    parser.add_argument("-sample_random_c", "--sample-random-clonotypes", type=bool, default=False,
-                        help="Whether to sample clonotypes randomly.")
+    parser.add_argument("-sample_random_c", "--sample-random-clonotypes", action="store_true",
+                        help="Sample clonotypes randomly.")
     parser.add_argument("-s", "--species", type=str, default="HomoSapiens",
                         choices=["HomoSapiens", "MusMusculus", "MacacaMulatta"],
                         help="Species for V/J gene alignment.")
@@ -57,14 +57,16 @@ def add_common_embedding_args(parser: argparse.ArgumentParser) -> argparse.Argum
     parser.add_argument("-m", "--metrics", type=str, default="dissimilarity",
                         choices=["similarity", "dissimilarity"],
                         help="Whether to calculate similarity or dissimilarity scores.")
-    parser.add_argument("-d", "--save-dists", type=bool, default=True,
-                        help="Whether to save the file with evaluated TCRemP distances.")
+    parser.add_argument("-d", "--save-dists", action="store_true", default=True,
+                        help="Save the file with evaluated TCRemP distances.")
+    parser.add_argument("--no-save-dists", dest="save_dists", action="store_false",
+                        help="Do not save the file with evaluated TCRemP distances.")
     return parser
 
 
 def add_common_clustering_args(parser: argparse.ArgumentParser) -> argparse.ArgumentParser:
-    parser.add_argument("-cl", "--cluster", type=bool, default=True,
-                        help="Whether to perform clustering.")
+    parser.add_argument("--skip-clustering", action="store_true",
+                        help="Skip clustering.")
     parser.add_argument("-npc", "--cluster-pc-components", type=int, default=50,
                         help="Number of PCA components for clustering.")
     parser.add_argument("-ms", "--cluster-min-samples", type=int, default=3,

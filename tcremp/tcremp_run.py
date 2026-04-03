@@ -167,7 +167,7 @@ def main():
     )
     logging.info("Finished processing %d clones.", processed_clones)
 
-    if args.cluster:
+    if not args.skip_clustering:
         clusters = run_dbscan_clustering(
             embeddings,
             n_components=args.cluster_pc_components,

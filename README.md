@@ -180,20 +180,22 @@ The parameters for running ``tcremp-run`` main script are the following:
 | --chain                    | -c               | single or paired clonotype chains                            | TRA, TRB, TRA_TRB                       | yes      | -                          |
 | --prototypes_path          | -p               | path to the custom input prototype table                     | path to file                            | no       | data/example/v_tcrpmhc.txt |
 | --n-prototypes             | -n               | number of prototypes to be selected for embedding supplemented prototype table | integer                                 | no       | None                       |
-| --sample-random-prototypes | -sample-random-p | whether to sample the prototypes randomly or not             | bool                                    | no       | False                      |
+| --sample-random-prototypes | -sample-random-p | sample prototypes randomly                                   | flag                                    | no       | False                      |
 | --n-clonotypes             | -nc              | number of clonotypes to be selected from input file          | integer                                 | no       | None                       |
-| --sample-random-clonotypes | -sample-random-c | whether to sample the clonotypes randomly or not             | bool                                    | no       | False                      |
+| --sample-random-clonotypes | -sample-random-c | sample clonotypes randomly                                   | flag                                    | no       | False                      |
 | --species                  | -s               | species of built-in prototypes to be used                    | HomoSapiens, MusMusculus, MacacaMulatta | no       | HomoSapiens                |
 | --random-seed              | -r               | random seed for random prototype selection                   | integer                                 | no       | None                       |
 | --nproc                    | -np              | number of processes to perform calculcation with             | integer                                 | no       | 1                          |
 | --lower-len-cdr3           | -llen            | filter out cdr3 with len <llen                               | integer                                 | no       | 30                         |
 | --higher-len-cdr3          | -hlen            | filter out cdr3 with len >hlen                               | integer                                 | no       | 30                         |
 | --metrics                  | -m               | which type of matrics to use: similarity or dissimilarity one | similarity, dissimilarity               | no       | dissimilarity              |
-| --save-dists               | -d               | whether to save the file with evaluated TCRemP distances or not | bool                                    | no       | True                       |
-| --cluster                  | -cl              | whether to perform the clustering or not                     | bool                                    | no       | True                       |
+| --no-save-dists            | -                | skip saving the file with evaluated TCRemP distances         | flag                                    | no       | False                      |
+| --skip-clustering          | -                | skip clustering and only save embeddings                     | flag                                    | no       | False                      |
 | --cluster-pc-components    | -npc             | number of PCA components for distances dimension reduction   | integer                                 | no       | 50                         |
 | --cluster-min-samples      | -ms              | min_samples parameter for DBSCAN used in clonotype clustering | integer                                 | no       | 3                          |
 | --k-neightbors             | -kn              | k-th neighbor parameter for Knee estimation                  | integer                                 | no       | 4                          |
+
+Clustering runs by default. To compute and save only embeddings, pass `--skip-clustering`.
 
 ### Separate TCREmP-cluster launch
 
