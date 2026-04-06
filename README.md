@@ -127,7 +127,7 @@ see ``data/example/VDJdb_data_paired_example.csv``).
 
 #### Single chain table example
 
-Either wide with missing values
+Simple long-format table without missing values
 
 | clone_id |   junction_aa   |  v_call  | j_call  | locus |
 |:--------:|:---------------:|:--------:|:-------:|:-----:|
@@ -147,84 +147,128 @@ A simple flat format
 
 ### Basic usage of TCREmP
 
-Run the tool as
+Run the main pipeline as
 
 ```{bash}
 tcremp-run --input my_input_data.txt --output my_folder --chain TRA_TRB
 ```
 
-The command above will:
+The command above performs the following stages:
 
-- checks input data format and proofreads the dataset
-- extracts TCR alpha and beta clonotypes from ``my_input_data.txt``
-- calculates distance scores from clonotypes for the built-in set of ``3000`` prototypes for each chain
+1. Reads the input table and optionally removes fully duplicated rows when `--unique-clonotypes` is enabled.
+2. Resolves the prototype table either from `--prototypes-path` or from built-in resources for the selected chain mode.
+3. Loads clonotypes into MIR objects and filters them by CDR3 length using `lower_len_cdr3 <= len(CDR3) < higher_len_cdr3`.
+4. Optionally subsamples clonotypes and prototypes.
+5. Writes `*_tcremp_representations.tsv` with clonotype metadata.
+6. Computes prototype-based embedding distances.
+7. Unless `--skip-clustering` is passed, runs standardization, PCA and DBSCAN clustering with automatic `eps` estimation by the knee method.
+8. Optionally computes cluster enrichment if `--enrich-by` is specified.
+9. Optionally computes PCA and t-SNE outputs if `--tsne` is specified.
+10. Saves embeddings to `*_tcremp.parquet` unless `--no-save-dists` is passed.
 
-[//]: # "- performs **PCA** and saves transformed data"
+Built-in chain modes supported by `tcremp-run`:
 
-[//]: # "- runs **DBSCAN** clustering with parameters ``min_samples = 2``, ``eps`` value inferred by knee method, and saves"
+- single-chain: `TRA`, `TRB`, `TRG`, `TRD`, `IGH`, `IGK`, `IGL`
+- paired-chain: `TRA_TRB`, `TRG_TRD`, `IGH_IGL`, `IGH_IGK`
 
-[//]: # "  resulting clusters"
+Built-in prototype tables contain 3000 entries per single chain. For paired-chain modes, TCRemP assembles a temporary paired prototype table from the corresponding per-chain built-in resources.
 
-[//]: # "  All input will be saved in ``my_folder/``"
+### Command line parameters for `tcremp-run`
 
-### Command line parameters
+| parameter | short usage | description | available values | required | default value |
+| --------- | ----------- | ----------- | ---------------- | -------- | ------------- |
+| --input | -i | input clonotype table | path to file | yes | - |
+| --output | -o | pipeline output folder | path to directory | yes | - |
+| --prefix | -e | output prefix | str | no | stem of `--input` |
+| --index-col | -x | column with clonotype IDs transferred to outputs | str | no | None |
+| --labels-col | -l | metadata column used for t-SNE coloring | str | no | None |
+| --enrich-by | - | metadata column used for cluster enrichment analysis | str | no | None |
+| --chain | -c | single- or paired-chain mode | `TRA`, `TRB`, `TRG`, `TRD`, `IGH`, `IGK`, `IGL`, `TRA_TRB`, `TRG_TRD`, `IGH_IGL`, `IGH_IGK` | yes | - |
+| --prototypes-path | -p | custom prototype table; if omitted, built-in resources are used | path to file | no | built-in table resolved from `--chain` |
+| --n-prototypes | -n | number of prototypes to use | integer | no | all selected prototypes |
+| --sample-random-prototypes | -sample_random_p | sample prototypes randomly instead of taking the first `n` | flag | no | False |
+| --n-clonotypes | -nc | number of clonotypes/clones to process | integer | no | all clonotypes |
+| --sample-random-clonotypes | -sample_random_c | sample clonotypes randomly instead of taking the first `n` | flag | no | False |
+| --species | -s | species used for V/J gene alignment | `HomoSapiens`, `MusMusculus`, `MacacaMulatta` | no | `HomoSapiens` |
+| --unique-clonotypes | -u | remove fully duplicated input rows before parsing | flag | no | False |
+| --random-seed | -r | random seed for sampling and stochastic procedures | integer | no | 42 |
+| --nproc | -np | number of worker processes/threads for embeddings | integer | no | auto: `min(8, cpu_count)` |
+| --lower-len-cdr3 | -llen | keep only clonotypes with `len(CDR3) >= lower-len-cdr3` | integer | no | 5 |
+| --higher-len-cdr3 | -hlen | keep only clonotypes with `len(CDR3) < higher-len-cdr3` | integer | no | 30 |
+| --metrics | -m | score type used for embedding | `similarity`, `dissimilarity` | no | `dissimilarity` |
+| --save-dists | -d | keep saving the embedding parquet; enabled by default | flag | no | True |
+| --no-save-dists | - | disable saving the embedding parquet | flag | no | False |
+| --skip-clustering | - | skip DBSCAN clustering | flag | no | False |
+| --cluster-pc-components | -npc | PCA components used before clustering and for PCA/t-SNE preprocessing | integer | no | 50 |
+| --cluster-min-samples | -ms | `min_samples` for DBSCAN in the main pipeline | integer | no | 3 |
+| --k-neighbors | -kn | k-th neighbor used for knee-based `eps` estimation in the main pipeline | integer | no | 4 |
+| --tsne | - | run PCA+t-SNE visualization and save coordinates | flag | no | False |
+| --tsne-init | - | t-SNE initialization | `pca`, `random` | no | `pca` |
+| --tsne-perplexity | - | t-SNE perplexity | float | no | 15 |
+| --enrichment-threshold | - | advisory within-cluster label fraction threshold | float | no | 0.7 |
+| --enrichment-fdr-threshold | - | FDR threshold for enrichment calls | float | no | 0.05 |
 
-The parameters for running ``tcremp-run`` main script are the following:
+Notes:
 
-| parameter                  | short usage      | description                                                  | available values                        | required | default value              |
-| -------------------------- | ---------------- | ------------------------------------------------------------ | --------------------------------------- | -------- | -------------------------- |
-| --input                    | -i               | input clonotype table                                        | path to file                            | yes      | -                          |
-| --output                   | -o               | pipeline output folder                                       | path to directory                       | no       | tcremp_{inputfilename}/    |
-| --prefix                   | -e               | prefix name for distance file                                | str                                     | no       | tcremp_{inputfilename}/    |
-| --index-col                | -x               | index column where the clonotype IDs are stored              | str                                     | no       | tcremp_{inputfilename}/    |
-| --chain                    | -c               | single or paired clonotype chains                            | TRA, TRB, TRA_TRB                       | yes      | -                          |
-| --prototypes_path          | -p               | path to the custom input prototype table                     | path to file                            | no       | data/example/v_tcrpmhc.txt |
-| --n-prototypes             | -n               | number of prototypes to be selected for embedding supplemented prototype table | integer                                 | no       | None                       |
-| --sample-random-prototypes | -sample-random-p | sample prototypes randomly                                   | flag                                    | no       | False                      |
-| --n-clonotypes             | -nc              | number of clonotypes to be selected from input file          | integer                                 | no       | None                       |
-| --sample-random-clonotypes | -sample-random-c | sample clonotypes randomly                                   | flag                                    | no       | False                      |
-| --species                  | -s               | species of built-in prototypes to be used                    | HomoSapiens, MusMusculus, MacacaMulatta | no       | HomoSapiens                |
-| --random-seed              | -r               | random seed for random prototype selection                   | integer                                 | no       | None                       |
-| --nproc                    | -np              | number of processes to perform calculcation with             | integer                                 | no       | 1                          |
-| --lower-len-cdr3           | -llen            | filter out cdr3 with len <llen                               | integer                                 | no       | 30                         |
-| --higher-len-cdr3          | -hlen            | filter out cdr3 with len >hlen                               | integer                                 | no       | 30                         |
-| --metrics                  | -m               | which type of matrics to use: similarity or dissimilarity one | similarity, dissimilarity               | no       | dissimilarity              |
-| --no-save-dists            | -                | skip saving the file with evaluated TCRemP distances         | flag                                    | no       | False                      |
-| --skip-clustering          | -                | skip clustering and only save embeddings                     | flag                                    | no       | False                      |
-| --cluster-pc-components    | -npc             | number of PCA components for distances dimension reduction   | integer                                 | no       | 50                         |
-| --cluster-min-samples      | -ms              | min_samples parameter for DBSCAN used in clonotype clustering | integer                                 | no       | 3                          |
-| --k-neightbors             | -kn              | k-th neighbor parameter for Knee estimation                  | integer                                 | no       | 4                          |
+- `clone_id` is included in `*_tcremp.parquet` only if `--index-col` is provided.
+- Metadata propagation for `--labels-col` and `--enrich-by` also requires `--index-col`; otherwise TCRemP logs a warning and skips metadata transfer.
+- `--save-dists` is enabled by default in the parser; use `--no-save-dists` to suppress parquet output.
 
-Clustering runs by default. To compute and save only embeddings, pass `--skip-clustering`.
+### Separate `tcremp-cluster` launch
 
-### Separate TCREmP-cluster launch
-
-If you have a file with TCREmP distances calculated you can separately run the clustering step to adjust it to your data. Run the tool as
+If you already have a numeric embedding table, you can run clustering separately:
 
 ```{bash}
-tcremp-cluster --input tcremp_distances.tsv --output tcremp_clusters.tsv --components 50 --min_samples 3 --kth_neighbor 4
+tcremp-cluster --input tcremp_distances.tsv --output tcremp_clusters.tsv --components 50 --min_samples 5 --kth_neighbor 4
 ```
 
-### Output
+Command line parameters for `tcremp-cluster`:
 
-The output TCRemP file will contain the following **columns**:
+| parameter | description | required | default value |
+| --------- | ----------- | -------- | ------------- |
+| --input | path to a TSV file with numeric features | yes | - |
+| --output | path to save clustering results | yes | - |
+| --components | number of PCA components | no | 50 |
+| --min_samples | `min_samples` parameter for DBSCAN | no | 5 |
+| --kth_neighbor | k-th neighbor used for knee-based `eps` estimation | no | 4 |
 
-- clone_id - assigned identifier to each row of the input table (either transferred from initial data or generated)
-- cdr3aa_*{alpha/beta}* - cdr3aa sequences for alpha/beta chain
-- v_*{alpha/beta}* - v gene for alpha/beta chain
-- j_*{alpha/beta}* - j gene for alpha/beta chain
-- *{i}*\_a_v, *{i}*\_a\_j, *{i}*_a_cdr3 - columns with distances to each alpha prototype
-- *{i}*\_b_v, *{i}*\_b_j, *{i}*_b_cdr3 - columns with distances to each beta prototype
+The standalone clustering command appends a `cluster` column to the input table. This differs from the main `tcremp-run` pipeline, which writes `cluster_id`.
 
-Each line of the output file corresponds to one input clonotype.
+### Separate `tcremp-enrich` launch
 
-When distance saving is enabled, TCRemP writes `*_tcremp.parquet`.
+If clustering has already been computed, enrichment can be run separately:
 
-Clustering output file will contain the following **columns**:
+```{bash}
+tcremp-enrich --input my_clusters.tsv --output enrich_out -e my_run --label-col phenotype
+```
 
-- clone_id - assigned identifier to each row of the input table (either transferred from initial data or generated)
-- cdr3aa_{alpha/beta} - cdr3aa sequences for alpha/beta chain
-- cluster - id of cluster, -1 if a clonotype is an outlier
+Command line parameters for `tcremp-enrich`:
+
+| parameter | short usage | description | required | default value |
+| --------- | ----------- | ----------- | -------- | ------------- |
+| --input | -i | clustered input table | yes | - |
+| --output | -o | output folder | yes | - |
+| --prefix | -e | output prefix | no | stem of `--input` |
+| --label-col | -l | column used for enrichment analysis | yes | - |
+| --cluster-col | - | cluster column name | no | `cluster_id` |
+| --enrichment-threshold | - | advisory within-cluster label fraction threshold | no | 0.7 |
+| --enrichment-fdr-threshold | - | FDR threshold used for enrichment calls | no | 0.05 |
+
+### Output files
+
+Files produced by `tcremp-run` depend on the selected flags:
+
+- `*_tcremp_representations.tsv`: always written; contains `clone_id`, chain annotations (`cdr3aa_*`, `v_*`, `j_*`) and transferred metadata columns when available.
+- `*_tcremp.parquet`: written unless `--no-save-dists` is passed; contains the embedding distance matrix.
+- `*_tcremp_clusters.tsv`: written unless `--skip-clustering` is passed; contains `cluster_id` plus all representation columns.
+- `*_tcremp_enrichment_summary.tsv`: written only when clustering is performed and `--enrich-by` is provided.
+- `*_tcremp_clusters_enriched.tsv`: written only when clustering is performed and `--enrich-by` is provided.
+- `*_tcremp_pca.tsv`: written only when `--tsne` is provided.
+- `*_tcremp_tsne.tsv`: written only when `--tsne` is provided.
+- `*_tcremp_tsne.png`: written only when both `--tsne` and `--labels-col` are provided.
+- `*.log`: run log written under the selected output prefix.
+
+TCRemP explicitly logs input deduplication and CDR3 length filtering. For filtering, the log records the bounds used together with the numbers of clonotypes kept and removed because they were too short or too long.
 
 ## Usage examples
 

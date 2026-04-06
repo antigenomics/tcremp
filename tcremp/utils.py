@@ -167,6 +167,39 @@ def load_input_table(path):
     return pd.read_csv(path, sep=None, engine="python")
 
 
+def preprocess_input_table(path, unique_clonotypes=False):
+    input_path = Path(path)
+    df = load_input_table(input_path)
+    logging.info("Loaded input table with %d rows and %d columns.", len(df), len(df.columns))
+
+    if not unique_clonotypes:
+        return str(input_path)
+
+    deduplicated = df.drop_duplicates()
+    removed = len(df) - len(deduplicated)
+    if removed == 0:
+        logging.info(
+            "--unique-clonotypes was requested, but no fully duplicated input rows were found."
+        )
+        return str(input_path)
+
+    fd, temp_path = tempfile.mkstemp(prefix="tcremp_unique_input_", suffix=".tsv")
+    os.close(fd)
+    temp_file = Path(temp_path)
+    if temp_file.exists():
+        temp_file.unlink()
+    deduplicated.to_csv(temp_path, sep="\t", index=False)
+    logging.info(
+        "--unique-clonotypes removed %d duplicated input row(s): %d -> %d rows. "
+        "Using deduplicated temporary file %s",
+        removed,
+        len(df),
+        len(deduplicated),
+        temp_path,
+    )
+    return str(Path(temp_path).resolve())
+
+
 def get_label_metadata(input_path, index_col, labels_col):
     if labels_col is None:
         return None
@@ -224,8 +257,64 @@ def validate_cdr3_len(repertoire, llen, hlen, single_chain):
     hlen = hlen if hlen is not None else 35
 
     if single_chain:
+        short = 0
+        long_or_equal = 0
+        total = 0
+        for clonotype in repertoire:
+            total += 1
+            cdr3_len = len(clonotype.cdr3aa)
+            if cdr3_len < llen:
+                short += 1
+            elif cdr3_len >= hlen:
+                long_or_equal += 1
+        kept = total - short - long_or_equal
+        logging.info(
+            "CDR3 length filtering for single-chain data with bounds [%d, %d): kept %d/%d, "
+            "removed %d short and %d long-or-equal clonotype(s).",
+            llen,
+            hlen,
+            kept,
+            total,
+            short,
+            long_or_equal,
+        )
         predicate = lambda x: llen <= len(x.cdr3aa) < hlen
     else:
+        chain_a_short = 0
+        chain_a_long_or_equal = 0
+        chain_b_short = 0
+        chain_b_long_or_equal = 0
+        total = 0
+        kept = 0
+        for clonotype in repertoire:
+            total += 1
+            len_a = len(clonotype.chainA.cdr3aa)
+            len_b = len(clonotype.chainB.cdr3aa)
+            valid_a = llen <= len_a < hlen
+            valid_b = llen <= len_b < hlen
+            if valid_a and valid_b:
+                kept += 1
+            if len_a < llen:
+                chain_a_short += 1
+            elif len_a >= hlen:
+                chain_a_long_or_equal += 1
+            if len_b < llen:
+                chain_b_short += 1
+            elif len_b >= hlen:
+                chain_b_long_or_equal += 1
+        logging.info(
+            "CDR3 length filtering for paired-chain data with bounds [%d, %d): kept %d/%d clones. "
+            "Removed clones may fail on either chain; counts by chain are TRA/chainA short=%d, "
+            "TRA/chainA long-or-equal=%d, TRB/chainB short=%d, TRB/chainB long-or-equal=%d.",
+            llen,
+            hlen,
+            kept,
+            total,
+            chain_a_short,
+            chain_a_long_or_equal,
+            chain_b_short,
+            chain_b_long_or_equal,
+        )
         predicate = (
             lambda x: llen <= len(x.chainA.cdr3aa) < hlen
             and llen <= len(x.chainB.cdr3aa) < hlen

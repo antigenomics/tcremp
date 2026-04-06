@@ -28,6 +28,7 @@ from tcremp.utils import (
     load_prototype_repertoire,
     log_memory_usage,
     prepare_output_path,
+    preprocess_input_table,
     resolve_input_file,
     resolve_prototype_file,
     subsample_repertoire,
@@ -100,6 +101,7 @@ def main():
     output_prefix = generate_output_prefix(args.input, args.prefix)
     configure_logging(input_path, output_path, output_prefix)
     log_memory_usage("init")
+    input_path = preprocess_input_table(input_path, unique_clonotypes=args.unique_clonotypes)
 
     chain = args.chain.split('_')
     locus = None if args.chain in DEFAULT_PAIRED_CHAIN_COMPONENTS else args.chain

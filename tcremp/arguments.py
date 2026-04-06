@@ -44,7 +44,7 @@ def add_common_embedding_args(parser: argparse.ArgumentParser) -> argparse.Argum
     parser.add_argument("-s", "--species", type=str, default="HomoSapiens",
                         choices=["HomoSapiens", "MusMusculus", "MacacaMulatta"],
                         help="Species for V/J gene alignment.")
-    parser.add_argument("-u", "--unique-clonotypes",
+    parser.add_argument("-u", "--unique-clonotypes", action="store_true",
                         help="Run only on unique clonotypes/clones from the input table.")
     parser.add_argument("-r", "--random-seed", type=int, default=42,
                         help="Random seed for sampling and stochastic procedures.")
